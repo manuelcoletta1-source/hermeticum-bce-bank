@@ -9,7 +9,7 @@ import {
 } from "./hbce-runtime-registry.reference.mjs";
 
 import {
-  assertNotRevoked
+  assertNotRevokedAt
 } from "./hbce-revocation.reference.mjs";
 
 
@@ -1140,7 +1140,7 @@ function evaluateInternal({
       authorization
     );
 
-  assertNotRevoked({
+  assertNotRevokedAt({
     registryPath:
       revocationRegistryPath,
 
@@ -1151,10 +1151,13 @@ function evaluateInternal({
       mandate.mandate_id,
 
     targetSha256:
-      mandateRecord.mandate_sha256
+      mandateRecord.mandate_sha256,
+
+    at:
+      now
   });
 
-  assertNotRevoked({
+  assertNotRevokedAt({
     registryPath:
       revocationRegistryPath,
 
@@ -1165,10 +1168,13 @@ function evaluateInternal({
       authority.authority_id,
 
     targetSha256:
-      authorityHash
+      authorityHash,
+
+    at:
+      now
   });
 
-  assertNotRevoked({
+  assertNotRevokedAt({
     registryPath:
       revocationRegistryPath,
 
@@ -1179,10 +1185,13 @@ function evaluateInternal({
       authorization.authorization_id,
 
     targetSha256:
-      authorizationHash
+      authorizationHash,
+
+    at:
+      now
   });
 
-  assertNotRevoked({
+  assertNotRevokedAt({
     registryPath:
       revocationRegistryPath,
 
@@ -1193,7 +1202,10 @@ function evaluateInternal({
       runtimeId,
 
     targetSha256:
-      runtimeCheck.runtime_sha256
+      runtimeCheck.runtime_sha256,
+
+    at:
+      now
   });
 
   checks.push(
