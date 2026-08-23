@@ -25,6 +25,29 @@ const DECISIONS =
   ]);
 
 
+const AUTHORIZED_CHECKS =
+  Object.freeze([
+    "MANDATE_VALID",
+    "AUTHORITY_VALID",
+    "AUTHORIZATION_VALID",
+    "REQUEST_WITHIN_SCOPE",
+    "DECISION_BOUND",
+    "SUBJECT_BOUND",
+    "RUNTIME_VALID",
+    "REVOCATION_CLEAR"
+  ]);
+
+
+const AUTHORIZED_CHECK_SET =
+  new Set(
+    AUTHORIZED_CHECKS
+  );
+
+
+const REASON_CODE_PATTERN =
+  /^[A-Z][A-Z0-9_]{1,63}$/;
+
+
 function fail(code) {
   throw new Error(code);
 }
@@ -189,25 +212,119 @@ function assertEvaluationResult(
   assertString(
     evaluationResult.reason_code,
     "EVT_REASON_CODE_INVALID",
-    256
+    64
   );
 
   if (
-    evaluationResult.decision ===
-      "ALLOW" &&
-    evaluationResult.reason_code !==
-      "AUTHORIZED"
+    !REASON_CODE_PATTERN.test(
+      evaluationResult.reason_code
+    )
   ) {
     fail(
-      "EVT_ALLOW_REASON_INVALID"
+      "EVT_REASON_CODE_VOCABULARY_INVALID"
+    );
+  }
+
+  if (
+    !Array.isArray(
+      evaluationResult.checks
+    )
+  ) {
+    fail(
+      "EVT_CHECKS_INVALID"
+    );
+  }
+
+  if (
+    evaluationResult.checks.length >
+    AUTHORIZED_CHECKS.length
+  ) {
+    fail(
+      "EVT_CHECKS_CARDINALITY_INVALID"
+    );
+  }
+
+  const seenChecks =
+    new Set();
+
+  for (
+    const check of
+    evaluationResult.checks
+  ) {
+    assertString(
+      check,
+      "EVT_CHECK_INVALID",
+      64
+    );
+
+    if (
+      !AUTHORIZED_CHECK_SET.has(
+        check
+      )
+    ) {
+      fail(
+        "EVT_CHECK_VOCABULARY_INVALID"
+      );
+    }
+
+    if (
+      seenChecks.has(
+        check
+      )
+    ) {
+      fail(
+        "EVT_CHECK_DUPLICATE"
+      );
+    }
+
+    seenChecks.add(
+      check
     );
   }
 
   if (
     evaluationResult.decision ===
-      "DENY" &&
-    evaluationResult.reason_code ===
+    "ALLOW"
+  ) {
+    if (
+      evaluationResult.reason_code !==
       "AUTHORIZED"
+    ) {
+      fail(
+        "EVT_ALLOW_REASON_INVALID"
+      );
+    }
+
+    if (
+      evaluationResult.checks.length !==
+      AUTHORIZED_CHECKS.length
+    ) {
+      fail(
+        "EVT_ALLOW_CHECKS_INVALID"
+      );
+    }
+
+    for (
+      let index = 0;
+      index < AUTHORIZED_CHECKS.length;
+      index += 1
+    ) {
+      if (
+        evaluationResult.checks[index] !==
+        AUTHORIZED_CHECKS[index]
+      ) {
+        fail(
+          "EVT_ALLOW_CHECKS_INVALID"
+        );
+      }
+    }
+
+    return;
+  }
+
+  if (
+    evaluationResult.reason_code ===
+    "AUTHORIZED"
   ) {
     fail(
       "EVT_DENY_REASON_INVALID"
@@ -215,29 +332,12 @@ function assertEvaluationResult(
   }
 
   if (
-    evaluationResult.checks !==
-    undefined
+    evaluationResult.checks.length !==
+    0
   ) {
-    if (
-      !Array.isArray(
-        evaluationResult.checks
-      )
-    ) {
-      fail(
-        "EVT_CHECKS_INVALID"
-      );
-    }
-
-    for (
-      const check of
-      evaluationResult.checks
-    ) {
-      assertString(
-        check,
-        "EVT_CHECK_INVALID",
-        128
-      );
-    }
+    fail(
+      "EVT_DENY_CHECKS_INVALID"
+    );
   }
 }
 
