@@ -989,15 +989,6 @@ export function assertNotRevokedAt({
     };
   }
 
-  if (
-    record.target_sha256 !==
-    targetSha256
-  ) {
-    fail(
-      "REVOCATION_TARGET_HASH_MISMATCH"
-    );
-  }
-
   const asOfMs =
     Date.parse(
       at
@@ -1013,9 +1004,22 @@ export function assertNotRevokedAt({
       record.recorded_at
     );
 
-  const effectiveAtAsOf =
-    revokedAtMs <= asOfMs &&
+  const observableAtAsOf =
     recordedAtMs <= asOfMs;
+
+  if (
+    observableAtAsOf &&
+    record.target_sha256 !==
+    targetSha256
+  ) {
+    fail(
+      "REVOCATION_TARGET_HASH_MISMATCH"
+    );
+  }
+
+  const effectiveAtAsOf =
+    observableAtAsOf &&
+    revokedAtMs <= asOfMs;
 
   if (
     effectiveAtAsOf
