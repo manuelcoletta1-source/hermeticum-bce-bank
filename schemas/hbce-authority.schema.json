@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermeticum-bce.eu/schemas/hbce-authority.schema.json",
+  "title": "HBCE Bank Authority",
+  "description": "Canonical Bank Edition authority representation. Authority defines a bounded capability held by a subject. Identity does not imply authority. Authority does not itself authorize a specific execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "authority_id",
+    "status",
+    "subject",
+    "issuer",
+    "function",
+    "source",
+    "scope",
+    "allowed_actions",
+    "validity",
+    "delegation"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "authority_id": {
+      "type": "string",
+      "pattern": "^AUTHORITY-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "SUSPENDED",
+        "EXPIRED",
+        "REVOKED"
+      ]
+    },
+    "subject": {
+      "$ref": "#/$defs/actor_reference"
+    },
+    "issuer": {
+      "$ref": "#/$defs/actor_reference"
+    },
+    "function": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "source": {
+      "$ref": "#/$defs/authority_source"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "allowed_actions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "constraints": {
+      "$ref": "#/$defs/constraints"
+    },
+    "validity": {
+      "$ref": "#/$defs/validity"
+    },
+    "delegation": {
+      "$ref": "#/$defs/delegation"
+    },
+    "policy_references": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/reference"
+      }
+    },
+    "evidence_references": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/reference"
+      }
+    },
+    "audit": {
+      "$ref": "#/$defs/audit"
+    }
+  },
+  "$defs": {
+    "reference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "actor_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_id",
+        "subject_type"
+      ],
+      "properties": {
+        "subject_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "subject_type": {
+          "type": "string",
+          "enum": [
+            "HUMAN",
+            "ORGANIZATION",
+            "AI",
+            "AGENT",
+            "MACHINE",
+            "SYSTEM"
+          ]
+        },
+        "ipr_reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "authority_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_type",
+        "source_reference"
+      ],
+      "properties": {
+        "source_type": {
+          "type": "string",
+          "enum": [
+            "MANDATE",
+            "ROLE",
+            "INSTITUTIONAL",
+            "CONTRACTUAL",
+            "STATUTORY",
+            "POLICY_DERIVED"
+          ]
+        },
+        "source_reference": {
+          "$ref": "#/$defs/reference"
+        },
+        "mandate_reference": {
+          "$ref": "#/$defs/reference"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_type": {
+                "const": "MANDATE"
+              }
+            },
+            "required": [
+              "source_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "mandate_reference"
+            ]
+          }
+        }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain"
+      ],
+      "properties": {
+        "domain": {
+          "type": "string",
+          "enum": [
+            "PAYMENT",
+            "CREDIT",
+            "ACCOUNT",
+            "KYC_AML",
+            "TREASURY",
+            "AUDIT",
+            "GENERAL_BANKING"
+          ]
+        },
+        "account_references": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "beneficiary_restriction": {
+          "type": "string",
+          "enum": [
+            "ANY",
+            "WHITELIST_ONLY",
+            "EXPLICIT_LIST"
+          ]
+        },
+        "beneficiary_references": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "geographic_scopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 64
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "beneficiary_restriction": {
+                "const": "EXPLICIT_LIST"
+              }
+            },
+            "required": [
+              "beneficiary_restriction"
+            ]
+          },
+          "then": {
+            "required": [
+              "beneficiary_references"
+            ],
+            "properties": {
+              "beneficiary_references": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "money_limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_amount": {
+          "$ref": "#/$defs/money_limit"
+        },
+        "max_operations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "human_review_required": {
+          "type": "boolean"
+        },
+        "runtime_restrictions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        }
+      }
+    },
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid_from",
+        "valid_until"
+      ],
+      "properties": {
+        "valid_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "clock_skew_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300,
+          "default": 0
+        }
+      }
+    },
+    "delegation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delegable",
+        "depth"
+      ],
+      "properties": {
+        "delegable": {
+          "type": "boolean"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "parent_authority_reference": {
+          "$ref": "#/$defs/reference"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "delegable": {
+                "const": true
+              }
+            },
+            "required": [
+              "delegable"
+            ]
+          },
+          "then": {
+            "required": [
+              "max_depth"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "depth": {
+                "minimum": 1
+              }
+            },
+            "required": [
+              "depth"
+            ]
+          },
+          "then": {
+            "required": [
+              "parent_authority_reference"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "parent_authority_reference"
+            ]
+          },
+          "then": {
+            "properties": {
+              "depth": {
+                "minimum": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "created_at",
+        "created_by"
+      ],
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_by": {
+          "$ref": "#/$defs/reference"
+        },
+        "authority_event_reference": {
+          "$ref": "#/$defs/reference"
+        },
+        "previous_authority_reference": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    }
+  }
+}
