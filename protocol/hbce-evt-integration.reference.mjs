@@ -385,6 +385,84 @@ function assertRuntimeBinding(
 }
 
 
+function assertRegistryAnchors(
+  registryAnchors
+) {
+  assertObject(
+    registryAnchors,
+    "EVT_REGISTRY_ANCHORS_INVALID"
+  );
+
+  assertExactKeys(
+    registryAnchors,
+    [
+      "mandate_record_sha256",
+      "runtime_record_sha256",
+      "revocation_as_of_record_count",
+      "revocation_as_of_head_record_sha256"
+    ],
+    "EVT_REGISTRY_ANCHORS_UNKNOWN_FIELD"
+  );
+
+  assertSha256(
+    registryAnchors.mandate_record_sha256,
+    "EVT_MANDATE_RECORD_SHA256_INVALID"
+  );
+
+  assertSha256(
+    registryAnchors.runtime_record_sha256,
+    "EVT_RUNTIME_RECORD_SHA256_INVALID"
+  );
+
+  if (
+    !Number.isInteger(
+      registryAnchors
+        .revocation_as_of_record_count
+    ) ||
+    registryAnchors
+      .revocation_as_of_record_count < 0
+  ) {
+    fail(
+      "EVT_REVOCATION_REGISTRY_COUNT_INVALID"
+    );
+  }
+
+  if (
+    registryAnchors
+      .revocation_as_of_record_count ===
+    0
+  ) {
+    if (
+      registryAnchors
+        .revocation_as_of_head_record_sha256 !==
+      null
+    ) {
+      fail(
+        "EVT_REVOCATION_REGISTRY_ANCHOR_INVALID"
+      );
+    }
+
+    return;
+  }
+
+  if (
+    registryAnchors
+      .revocation_as_of_head_record_sha256 ===
+    null
+  ) {
+    fail(
+      "EVT_REVOCATION_REGISTRY_ANCHOR_INVALID"
+    );
+  }
+
+  assertSha256(
+    registryAnchors
+      .revocation_as_of_head_record_sha256,
+    "EVT_REVOCATION_REGISTRY_HEAD_SHA256_INVALID"
+  );
+}
+
+
 function assertEvent(
   event
 ) {
@@ -403,6 +481,7 @@ function assertEvent(
       "evaluator",
       "references",
       "artifact_hashes",
+      "registry_anchors",
       "request_sha256",
       "runtime_binding",
       "result",
@@ -414,7 +493,9 @@ function assertEvent(
 
   if (
     event.schema_version !==
-    "1.1"
+      "1.1" &&
+    event.schema_version !==
+      "1.2"
   ) {
     fail(
       "EVT_SCHEMA_VERSION_UNSUPPORTED"
@@ -513,32 +594,57 @@ function assertEvent(
     "EVT_ARTIFACT_HASHES_INVALID"
   );
 
+  const artifactHashKeys =
+    event.schema_version ===
+      "1.1"
+      ? [
+          "mandate_sha256",
+          "authority_sha256",
+          "decision_sha256",
+          "authorization_sha256",
+          "runtime_record_sha256",
+          "policy_context_sha256"
+        ]
+      : [
+          "mandate_sha256",
+          "authority_sha256",
+          "decision_sha256",
+          "authorization_sha256",
+          "runtime_sha256",
+          "policy_context_sha256"
+        ];
+
   assertExactKeys(
     event.artifact_hashes,
-    [
-      "mandate_sha256",
-      "authority_sha256",
-      "decision_sha256",
-      "authorization_sha256",
-      "runtime_record_sha256",
-      "policy_context_sha256"
-    ],
+    artifactHashKeys,
     "EVT_ARTIFACT_HASHES_UNKNOWN_FIELD"
   );
 
   for (
-    const key of [
-      "mandate_sha256",
-      "authority_sha256",
-      "decision_sha256",
-      "authorization_sha256",
-      "runtime_record_sha256",
-      "policy_context_sha256"
-    ]
+    const key of
+    artifactHashKeys
   ) {
     assertSha256(
       event.artifact_hashes[key],
       `EVT_${key.toUpperCase()}_INVALID`
+    );
+  }
+
+  if (
+    event.schema_version ===
+    "1.1"
+  ) {
+    if (
+      event.registry_anchors !==
+      undefined
+    ) {
+      fail(
+        "EVT_LEGACY_REGISTRY_ANCHORS_FORBIDDEN"
+      );
+    }
+  } else {
+    assertRegistryAnchors(
+      event.registry_anchors
     );
   }
 
@@ -608,13 +714,19 @@ export function buildAuthorizationEvaluationEvt({
 
   mandateId,
   mandateSha256,
+  mandateRecordSha256,
 
   authority,
   decisionEvidence,
   authorization,
 
   policyContext,
+
+  runtimeSha256,
   runtimeRecordSha256,
+
+  revocationAsOfRecordCount,
+  revocationAsOfHeadRecordSha256,
 
   evaluationResult
 }) {
@@ -654,6 +766,11 @@ export function buildAuthorizationEvaluationEvt({
   assertSha256(
     mandateSha256,
     "EVT_MANDATE_SHA256_INVALID"
+  );
+
+  assertSha256(
+    mandateRecordSha256,
+    "EVT_MANDATE_RECORD_SHA256_INVALID"
   );
 
   assertObject(
@@ -770,8 +887,31 @@ export function buildAuthorizationEvaluationEvt({
   );
 
   assertSha256(
+    runtimeSha256,
+    "EVT_RUNTIME_SHA256_INVALID"
+  );
+
+  assertSha256(
     runtimeRecordSha256,
     "EVT_RUNTIME_RECORD_SHA256_INVALID"
+  );
+
+  const registryAnchors = {
+    mandate_record_sha256:
+      mandateRecordSha256,
+
+    runtime_record_sha256:
+      runtimeRecordSha256,
+
+    revocation_as_of_record_count:
+      revocationAsOfRecordCount,
+
+    revocation_as_of_head_record_sha256:
+      revocationAsOfHeadRecordSha256
+  };
+
+  assertRegistryAnchors(
+    registryAnchors
   );
 
   assertEvaluationResult(
@@ -789,7 +929,7 @@ export function buildAuthorizationEvaluationEvt({
 
   const event = {
     schema_version:
-      "1.1",
+      "1.2",
 
     evt_id:
       evtId,
@@ -844,14 +984,17 @@ export function buildAuthorizationEvaluationEvt({
           authorization
         ),
 
-      runtime_record_sha256:
-        runtimeRecordSha256,
+      runtime_sha256:
+        runtimeSha256,
 
       policy_context_sha256:
         sha256Canonical(
           policyContext
         )
     },
+
+    registry_anchors:
+      registryAnchors,
 
     request_sha256:
       authorization.request.request_sha256,
