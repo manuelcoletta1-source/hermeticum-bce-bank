@@ -1,0 +1,486 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermeticum-bce.eu/schemas/hbce-mandate.schema.json",
+  "title": "HBCE Bank Mandate",
+  "description": "Canonical Bank Edition mandate representation. A mandate defines bounded delegation and does not itself authorize a specific execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mandate_id",
+    "status",
+    "grantor",
+    "grantee",
+    "function",
+    "scope",
+    "allowed_actions",
+    "validity",
+    "runtime_constraints",
+    "revocation"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "mandate_id": {
+      "type": "string",
+      "pattern": "^MANDATE-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "ACTIVE",
+        "SUSPENDED",
+        "EXPIRED",
+        "REVOKED"
+      ]
+    },
+    "grantor": {
+      "$ref": "#/$defs/actor_reference"
+    },
+    "grantee": {
+      "$ref": "#/$defs/actor_reference"
+    },
+    "function": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "allowed_actions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    },
+    "validity": {
+      "$ref": "#/$defs/validity"
+    },
+    "policy_references": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/reference"
+      }
+    },
+    "runtime_constraints": {
+      "$ref": "#/$defs/runtime_constraints"
+    },
+    "revocation": {
+      "$ref": "#/$defs/revocation"
+    },
+    "evidence_references": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/reference"
+      }
+    },
+    "audit": {
+      "$ref": "#/$defs/audit"
+    }
+  },
+  "$defs": {
+    "reference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "actor_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_id",
+        "subject_type"
+      ],
+      "properties": {
+        "subject_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "subject_type": {
+          "type": "string",
+          "enum": [
+            "HUMAN",
+            "ORGANIZATION",
+            "AI",
+            "AGENT",
+            "MACHINE",
+            "SYSTEM"
+          ]
+        },
+        "ipr_reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "domain"
+      ],
+      "properties": {
+        "domain": {
+          "type": "string",
+          "enum": [
+            "PAYMENT",
+            "CREDIT",
+            "ACCOUNT",
+            "KYC_AML",
+            "TREASURY",
+            "AUDIT",
+            "GENERAL_BANKING"
+          ]
+        },
+        "account_references": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "beneficiary_restriction": {
+          "type": "string",
+          "enum": [
+            "ANY",
+            "WHITELIST_ONLY",
+            "EXPLICIT_LIST"
+          ]
+        },
+        "beneficiary_references": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "geographic_scopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 64
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "beneficiary_restriction": {
+                "const": "EXPLICIT_LIST"
+              }
+            },
+            "required": [
+              "beneficiary_restriction"
+            ]
+          },
+          "then": {
+            "required": [
+              "beneficiary_references"
+            ],
+            "properties": {
+              "beneficiary_references": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "money_limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_amount": {
+          "$ref": "#/$defs/money_limit"
+        },
+        "max_operations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "single_use": {
+          "type": "boolean"
+        },
+        "human_review_required": {
+          "type": "boolean"
+        },
+        "approval_threshold": {
+          "$ref": "#/$defs/money_limit"
+        }
+      }
+    },
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid_from",
+        "valid_until"
+      ],
+      "properties": {
+        "valid_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "clock_skew_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300,
+          "default": 0
+        }
+      }
+    },
+    "runtime_constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_mode"
+      ],
+      "properties": {
+        "binding_mode": {
+          "type": "string",
+          "enum": [
+            "ANY_AUTHORIZED",
+            "ALLOWLIST"
+          ]
+        },
+        "allowed_runtime_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "allowed_runtime_types": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "AI_AGENT",
+              "AI_MODEL",
+              "DETERMINISTIC_SOFTWARE",
+              "MACHINE",
+              "HUMAN_OPERATED_SOFTWARE",
+              "EXTERNAL_SERVICE"
+            ]
+          }
+        },
+        "provider_restrictions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "version_restrictions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "binding_mode": {
+                "const": "ALLOWLIST"
+              }
+            },
+            "required": [
+              "binding_mode"
+            ]
+          },
+          "then": {
+            "required": [
+              "allowed_runtime_ids"
+            ],
+            "properties": {
+              "allowed_runtime_ids": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "NOT_REVOKED",
+            "REVOKED"
+          ]
+        },
+        "revoked_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "authority_reference": {
+          "$ref": "#/$defs/reference"
+        },
+        "evidence_reference": {
+          "$ref": "#/$defs/reference"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "REVOKED"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "revoked_at",
+              "reason",
+              "authority_reference"
+            ]
+          }
+        }
+      ]
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "created_at",
+        "created_by"
+      ],
+      "properties": {
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_by": {
+          "$ref": "#/$defs/reference"
+        },
+        "previous_mandate_reference": {
+          "$ref": "#/$defs/reference"
+        },
+        "evt_reference": {
+          "$ref": "#/$defs/reference"
+        },
+        "opc_reference": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "REVOKED"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "revocation": {
+            "properties": {
+              "state": {
+                "const": "REVOKED"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "revocation": {
+            "properties": {
+              "state": {
+                "const": "REVOKED"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          }
+        },
+        "required": [
+          "revocation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "REVOKED"
+          }
+        }
+      }
+    }
+  ]
+}
