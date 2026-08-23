@@ -678,6 +678,15 @@ export function buildAuthorizationEvaluationEvt({
     evaluationResult
   );
 
+  if (
+    decisionEvidence.outcome !==
+    evaluationResult.decision
+  ) {
+    fail(
+      "EVT_DECISION_OUTCOME_MISMATCH"
+    );
+  }
+
   const event = {
     schema_version:
       "1.1",
