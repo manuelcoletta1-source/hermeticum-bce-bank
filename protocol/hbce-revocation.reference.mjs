@@ -36,6 +36,22 @@ const REASON_CODES = new Set([
   "OTHER"
 ]);
 
+const ALLOWED_RECORD_KEYS =
+  new Set([
+    "registry_version",
+    "record_type",
+    "recorded_at",
+    "previous_record_sha256",
+    "revocation_id",
+    "target_type",
+    "target_id",
+    "target_sha256",
+    "revoked_at",
+    "revocation_sha256",
+    "record_sha256",
+    "revocation"
+  ]);
+
 const ALLOWED_REVOCATION_KEYS =
   new Set([
     "schema_version",
@@ -309,6 +325,12 @@ function parseRegistry(
   const seenTargets =
     new Set();
 
+  let expectedPreviousRecordHash =
+    null;
+
+  let previousRecordedAtMs =
+    null;
+
   for (
     let index = 0;
     index < lines.length;
@@ -337,12 +359,29 @@ function parseRegistry(
       );
     }
 
+    for (
+      const key of
+      Object.keys(record)
+    ) {
+      if (
+        !ALLOWED_RECORD_KEYS.has(
+          key
+        )
+      ) {
+        fail(
+          `REVOCATION_REGISTRY_UNKNOWN_FIELD:${index + 1}:${key}`
+        );
+      }
+    }
+
     if (
       record.registry_version !==
-        "1.0" ||
+        "1.1" ||
       record.record_type !==
         "TARGET_REVOKED" ||
       typeof record.revocation_sha256 !==
+        "string" ||
+      typeof record.record_sha256 !==
         "string" ||
       record.revocation === null ||
       typeof record.revocation !==
@@ -350,6 +389,35 @@ function parseRegistry(
     ) {
       fail(
         `REVOCATION_REGISTRY_CORRUPT_RECORD:${index + 1}`
+      );
+    }
+
+    if (
+      record.previous_record_sha256 !==
+      expectedPreviousRecordHash
+    ) {
+      fail(
+        `REVOCATION_REGISTRY_CHAIN_MISMATCH:${index + 1}`
+      );
+    }
+
+    assertIsoDate(
+      record.recorded_at,
+      `REVOCATION_REGISTRY_RECORDED_AT_INVALID:${index + 1}`
+    );
+
+    const recordedAtMs =
+      Date.parse(
+        record.recorded_at
+      );
+
+    if (
+      previousRecordedAtMs !== null &&
+      recordedAtMs <
+        previousRecordedAtMs
+    ) {
+      fail(
+        `REVOCATION_REGISTRY_TIME_ORDER_MISMATCH:${index + 1}`
       );
     }
 
@@ -405,6 +473,70 @@ function parseRegistry(
     }
 
     if (
+      Date.parse(
+        record.recorded_at
+      ) <
+      Date.parse(
+        record.revoked_at
+      )
+    ) {
+      fail(
+        `REVOCATION_REGISTRY_BACKDATED_RECORD:${index + 1}`
+      );
+    }
+
+    const recordHashBasis = {
+      registry_version:
+        record.registry_version,
+
+      record_type:
+        record.record_type,
+
+      recorded_at:
+        record.recorded_at,
+
+      previous_record_sha256:
+        record.previous_record_sha256,
+
+      revocation_id:
+        record.revocation_id,
+
+      target_type:
+        record.target_type,
+
+      target_id:
+        record.target_id,
+
+      target_sha256:
+        record.target_sha256,
+
+      revoked_at:
+        record.revoked_at,
+
+      revocation_sha256:
+        record.revocation_sha256,
+
+      revocation:
+        record.revocation
+    };
+
+    const calculatedRecordHash =
+      sha256(
+        canonicalize(
+          recordHashBasis
+        )
+      );
+
+    if (
+      calculatedRecordHash !==
+      record.record_sha256
+    ) {
+      fail(
+        `REVOCATION_REGISTRY_RECORD_HASH_MISMATCH:${index + 1}`
+      );
+    }
+
+    if (
       seenRevocationIds.has(
         record.revocation_id
       )
@@ -436,6 +568,12 @@ function parseRegistry(
     );
 
     records.push(record);
+
+    expectedPreviousRecordHash =
+      record.record_sha256;
+
+    previousRecordedAtMs =
+      recordedAtMs;
   }
 
   return records;
@@ -510,7 +648,8 @@ function targetKey({
 
 export function registerRevocation({
   registryPath,
-  revocation
+  revocation,
+  recordedAt
 }) {
   assertString(
     registryPath,
@@ -520,6 +659,24 @@ export function registerRevocation({
   assertRevocation(
     revocation
   );
+
+  assertIsoDate(
+    recordedAt,
+    "REVOCATION_RECORDED_AT_INVALID"
+  );
+
+  if (
+    Date.parse(
+      recordedAt
+    ) <
+    Date.parse(
+      revocation.revoked_at
+    )
+  ) {
+    fail(
+      "REVOCATION_RECORDED_BEFORE_EFFECTIVE_TIME"
+    );
+  }
 
   const immutableRevocation =
     deepClone(
@@ -579,10 +736,41 @@ export function registerRevocation({
         )
       );
 
-    const record = {
-      registry_version: "1.0",
+    const previousRecordHash =
+      records.length === 0
+        ? null
+        : records[
+            records.length - 1
+          ].record_sha256;
+
+    if (
+      records.length > 0 &&
+      Date.parse(
+        recordedAt
+      ) <
+      Date.parse(
+        records[
+          records.length - 1
+        ].recorded_at
+      )
+    ) {
+      fail(
+        "REVOCATION_RECORDED_AT_ORDER_INVALID"
+      );
+    }
+
+    const recordHashBasis = {
+      registry_version:
+        "1.1",
+
       record_type:
         "TARGET_REVOKED",
+
+      recorded_at:
+        recordedAt,
+
+      previous_record_sha256:
+        previousRecordHash,
 
       revocation_id:
         immutableRevocation.revocation_id,
@@ -604,6 +792,20 @@ export function registerRevocation({
 
       revocation:
         immutableRevocation
+    };
+
+    const recordHash =
+      sha256(
+        canonicalize(
+          recordHashBasis
+        )
+      );
+
+    const record = {
+      ...recordHashBasis,
+
+      record_sha256:
+        recordHash
     };
 
     appendFileSync(
@@ -671,8 +873,16 @@ export function verifyRevocationRegistry({
 
   return {
     valid: true,
+
     record_count:
-      records.length
+      records.length,
+
+    head_record_sha256:
+      records.length === 0
+        ? null
+        : records[
+            records.length - 1
+          ].record_sha256
   };
 }
 
