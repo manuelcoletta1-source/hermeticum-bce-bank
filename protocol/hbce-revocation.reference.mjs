@@ -934,3 +934,115 @@ export function assertNotRevoked({
     "TARGET_REVOKED"
   );
 }
+
+
+export function assertNotRevokedAt({
+  registryPath,
+  targetType,
+  targetId,
+  targetSha256,
+  at
+}) {
+  if (
+    typeof targetSha256 !== "string" ||
+    !SHA256_PATTERN.test(
+      targetSha256
+    )
+  ) {
+    fail(
+      "REVOCATION_TARGET_SHA256_INVALID"
+    );
+  }
+
+  assertIsoDate(
+    at,
+    "REVOCATION_AS_OF_INVALID"
+  );
+
+  const record =
+    getRevocation({
+      registryPath,
+      targetType,
+      targetId
+    });
+
+  if (!record) {
+    return {
+      valid: true,
+
+      revoked: false,
+
+      target_type:
+        targetType,
+
+      target_id:
+        targetId,
+
+      as_of:
+        at,
+
+      revocation_record_present:
+        false,
+
+      revocation_effective_at_as_of:
+        false
+    };
+  }
+
+  if (
+    record.target_sha256 !==
+    targetSha256
+  ) {
+    fail(
+      "REVOCATION_TARGET_HASH_MISMATCH"
+    );
+  }
+
+  const asOfMs =
+    Date.parse(
+      at
+    );
+
+  const revokedAtMs =
+    Date.parse(
+      record.revoked_at
+    );
+
+  const recordedAtMs =
+    Date.parse(
+      record.recorded_at
+    );
+
+  const effectiveAtAsOf =
+    revokedAtMs <= asOfMs &&
+    recordedAtMs <= asOfMs;
+
+  if (
+    effectiveAtAsOf
+  ) {
+    fail(
+      "TARGET_REVOKED"
+    );
+  }
+
+  return {
+    valid: true,
+
+    revoked: false,
+
+    target_type:
+      targetType,
+
+    target_id:
+      targetId,
+
+    as_of:
+      at,
+
+    revocation_record_present:
+      true,
+
+    revocation_effective_at_as_of:
+      false
+  };
+}
