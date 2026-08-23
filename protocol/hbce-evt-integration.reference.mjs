@@ -314,7 +314,7 @@ function assertEvent(
 
   if (
     event.schema_version !==
-    "1.0"
+    "1.1"
   ) {
     fail(
       "EVT_SCHEMA_VERSION_UNSUPPORTED"
@@ -418,8 +418,10 @@ function assertEvent(
     [
       "mandate_sha256",
       "authority_sha256",
+      "decision_sha256",
       "authorization_sha256",
-      "runtime_registry_sha256"
+      "runtime_record_sha256",
+      "policy_context_sha256"
     ],
     "EVT_ARTIFACT_HASHES_UNKNOWN_FIELD"
   );
@@ -428,8 +430,10 @@ function assertEvent(
     const key of [
       "mandate_sha256",
       "authority_sha256",
+      "decision_sha256",
       "authorization_sha256",
-      "runtime_registry_sha256"
+      "runtime_record_sha256",
+      "policy_context_sha256"
     ]
   ) {
     assertSha256(
@@ -459,7 +463,8 @@ function assertEvent(
   assertExactKeys(
     event.privacy,
     [
-      "raw_request_included"
+      "raw_request_included",
+      "raw_policy_context_included"
     ],
     "EVT_PRIVACY_UNKNOWN_FIELD"
   );
@@ -470,6 +475,15 @@ function assertEvent(
   ) {
     fail(
       "EVT_RAW_REQUEST_FORBIDDEN"
+    );
+  }
+
+  if (
+    event.privacy.raw_policy_context_included !==
+    false
+  ) {
+    fail(
+      "EVT_RAW_POLICY_CONTEXT_FORBIDDEN"
     );
   }
 
@@ -496,9 +510,11 @@ export function buildAuthorizationEvaluationEvt({
   mandateSha256,
 
   authority,
+  decisionEvidence,
   authorization,
 
-  runtimeRegistrySha256,
+  policyContext,
+  runtimeRecordSha256,
 
   evaluationResult
 }) {
@@ -546,8 +562,18 @@ export function buildAuthorizationEvaluationEvt({
   );
 
   assertObject(
+    decisionEvidence,
+    "EVT_DECISION_EVIDENCE_INVALID"
+  );
+
+  assertObject(
     authorization,
     "EVT_AUTHORIZATION_INVALID"
+  );
+
+  assertObject(
+    policyContext,
+    "EVT_POLICY_CONTEXT_INVALID"
   );
 
   assertString(
@@ -564,6 +590,20 @@ export function buildAuthorizationEvaluationEvt({
     authorization.decision_reference,
     "EVT_DECISION_ID_INVALID"
   );
+
+  assertString(
+    decisionEvidence.decision_id,
+    "EVT_DECISION_EVIDENCE_ID_INVALID"
+  );
+
+  if (
+    authorization.decision_reference !==
+    decisionEvidence.decision_id
+  ) {
+    fail(
+      "EVT_DECISION_REFERENCE_MISMATCH"
+    );
+  }
 
   if (
     authorization.mandate_reference !==
@@ -593,13 +633,45 @@ export function buildAuthorizationEvaluationEvt({
     "EVT_REQUEST_SHA256_INVALID"
   );
 
+  assertSha256(
+    decisionEvidence.request_sha256,
+    "EVT_DECISION_REQUEST_SHA256_INVALID"
+  );
+
+  if (
+    decisionEvidence.request_sha256 !==
+    authorization.request.request_sha256
+  ) {
+    fail(
+      "EVT_DECISION_REQUEST_MISMATCH"
+    );
+  }
+
+  if (
+    decisionEvidence.mandate_reference !==
+    mandateId
+  ) {
+    fail(
+      "EVT_DECISION_MANDATE_MISMATCH"
+    );
+  }
+
+  if (
+    decisionEvidence.authority_reference !==
+    authority.authority_id
+  ) {
+    fail(
+      "EVT_DECISION_AUTHORITY_MISMATCH"
+    );
+  }
+
   assertRuntimeBinding(
     authorization.runtime_binding
   );
 
   assertSha256(
-    runtimeRegistrySha256,
-    "EVT_RUNTIME_REGISTRY_SHA256_INVALID"
+    runtimeRecordSha256,
+    "EVT_RUNTIME_RECORD_SHA256_INVALID"
   );
 
   assertEvaluationResult(
@@ -608,7 +680,7 @@ export function buildAuthorizationEvaluationEvt({
 
   const event = {
     schema_version:
-      "1.0",
+      "1.1",
 
     evt_id:
       evtId,
@@ -653,13 +725,23 @@ export function buildAuthorizationEvaluationEvt({
           authority
         ),
 
+      decision_sha256:
+        sha256Canonical(
+          decisionEvidence
+        ),
+
       authorization_sha256:
         sha256Canonical(
           authorization
         ),
 
-      runtime_registry_sha256:
-        runtimeRegistrySha256
+      runtime_record_sha256:
+        runtimeRecordSha256,
+
+      policy_context_sha256:
+        sha256Canonical(
+          policyContext
+        )
     },
 
     request_sha256:
@@ -706,6 +788,9 @@ export function buildAuthorizationEvaluationEvt({
 
     privacy: {
       raw_request_included:
+        false,
+
+      raw_policy_context_included:
         false
     }
   };
