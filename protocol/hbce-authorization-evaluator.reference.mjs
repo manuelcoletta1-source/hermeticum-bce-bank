@@ -5,7 +5,8 @@ import {
 } from "./hbce-mandate-registry.reference.mjs";
 
 import {
-  assertRuntimeBinding
+  assertRuntimeBinding,
+  getRuntime
 } from "./hbce-runtime-registry.reference.mjs";
 
 import {
@@ -796,6 +797,20 @@ function evaluateInternal({
     );
   }
 
+  const mandateRecordedAt =
+    parseTime(
+      mandateRecord.recorded_at,
+      "MANDATE_RECORDED_AT_INVALID"
+    );
+
+  if (
+    mandateRecordedAt > nowMs
+  ) {
+    fail(
+      "MANDATE_REGISTERED_IN_FUTURE"
+    );
+  }
+
   const mandate =
     mandateRecord.mandate;
 
@@ -1108,6 +1123,44 @@ function evaluateInternal({
       binding:
         presentedRuntimeBinding
     });
+
+  const runtimeRecord =
+    getRuntime({
+      registryPath:
+        runtimeRegistryPath,
+
+      runtimeId:
+        presentedRuntimeBinding.runtime_id
+    });
+
+  if (!runtimeRecord) {
+    fail(
+      "RUNTIME_NOT_REGISTERED"
+    );
+  }
+
+  const runtimeRecordedAt =
+    parseTime(
+      runtimeRecord.recorded_at,
+      "RUNTIME_RECORDED_AT_INVALID"
+    );
+
+  if (
+    runtimeRecordedAt > nowMs
+  ) {
+    fail(
+      "RUNTIME_REGISTERED_IN_FUTURE"
+    );
+  }
+
+  if (
+    runtimeRecord.runtime_sha256 !==
+    runtimeCheck.runtime_sha256
+  ) {
+    fail(
+      "RUNTIME_REGISTRY_BINDING_HASH_MISMATCH"
+    );
+  }
 
   const runtimeId =
     presentedRuntimeBinding.runtime_id;
