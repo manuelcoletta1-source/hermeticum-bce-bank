@@ -61,7 +61,7 @@ import {
 
 
 const EVALUATOR_SHA =
-  "c897eeca32aa680b4d23fd64518f65dad40c40a0d154c213ee29e54712a3cbee";
+  "cab0273909a9c00b453ed4883bce8a7dce5ea9b935d8d9917e4c9bd5dc9d7516";
 
 
 const expectedEvaluator = {
@@ -69,7 +69,7 @@ const expectedEvaluator = {
     "HBCE-A008",
 
   evaluator_version:
-    "A008.2",
+    "A008.3",
 
   evaluator_sha256:
     EVALUATOR_SHA

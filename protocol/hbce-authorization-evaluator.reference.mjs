@@ -1269,6 +1269,81 @@ function evaluateInternal({
 }
 
 
+const STABLE_REASON_CODE_PATTERN =
+  /^[A-Z][A-Z0-9_]{1,63}$/;
+
+
+function normalizeReasonCode(
+  error
+) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : "";
+
+
+  /*
+   * Already stable protocol/domain codes are preserved
+   * exactly. This keeps specific fail-closed semantics
+   * such as TARGET_REVOKED or MANDATE_EXPIRED.
+   */
+
+  if (
+    STABLE_REASON_CODE_PATTERN.test(
+      message
+    )
+  ) {
+    return message;
+  }
+
+
+  /*
+   * Registry parsers may deliberately expose internal
+   * diagnostics containing line numbers or field names:
+   *
+   *   MANDATE_REGISTRY_CORRUPT_JSON_LINE:1
+   *
+   * Those diagnostics are useful locally but are not
+   * part of the stable EVT reason-code vocabulary.
+   */
+
+  if (
+    message.startsWith(
+      "MANDATE_REGISTRY_"
+    )
+  ) {
+    return "MANDATE_REGISTRY_INVALID";
+  }
+
+
+  if (
+    message.startsWith(
+      "RUNTIME_REGISTRY_"
+    )
+  ) {
+    return "RUNTIME_REGISTRY_INVALID";
+  }
+
+
+  if (
+    message.startsWith(
+      "REVOCATION_REGISTRY_"
+    )
+  ) {
+    return "REVOCATION_REGISTRY_INVALID";
+  }
+
+
+  /*
+   * Native exceptions and any future non-protocol
+   * diagnostics fail closed without leaking unstable
+   * implementation text into EVT.
+   */
+
+  return "AUTHORIZATION_EVALUATION_FAILED";
+}
+
+
 export function evaluateAuthorization(
   input
 ) {
@@ -1283,9 +1358,9 @@ export function evaluateAuthorization(
     return result;
   } catch (error) {
     return deny(
-      error instanceof Error
-        ? error.message
-        : "EVALUATION_ERROR",
+      normalizeReasonCode(
+        error
+      ),
       checks
     );
   }
