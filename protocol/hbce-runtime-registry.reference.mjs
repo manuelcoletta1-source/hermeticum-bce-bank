@@ -7,7 +7,10 @@ import {
   unlinkSync
 } from "node:fs";
 
-import { createHash } from "node:crypto";
+import {
+  createHash
+} from "node:crypto";
+
 
 const RUNTIME_ID_PATTERN =
   /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
@@ -15,36 +18,59 @@ const RUNTIME_ID_PATTERN =
 const SHA256_PATTERN =
   /^[a-f0-9]{64}$/;
 
-const RUNTIME_TYPES = new Set([
-  "AI_AGENT",
-  "AI_MODEL",
-  "DETERMINISTIC_SOFTWARE",
-  "MACHINE",
-  "HUMAN_OPERATED_SOFTWARE",
-  "EXTERNAL_SERVICE"
-]);
 
-const RUNTIME_STATUSES = new Set([
-  "ACTIVE",
-  "SUSPENDED",
-  "REVOKED",
-  "RETIRED"
-]);
+const RUNTIME_TYPES =
+  new Set([
+    "AI_AGENT",
+    "AI_MODEL",
+    "DETERMINISTIC_SOFTWARE",
+    "MACHINE",
+    "HUMAN_OPERATED_SOFTWARE",
+    "EXTERNAL_SERVICE"
+  ]);
+
+
+const RUNTIME_STATUSES =
+  new Set([
+    "ACTIVE",
+    "SUSPENDED",
+    "REVOKED",
+    "RETIRED"
+  ]);
+
+
+const ALLOWED_RECORD_KEYS =
+  new Set([
+    "registry_version",
+    "record_type",
+    "runtime_id",
+    "recorded_at",
+    "recorded_by",
+    "previous_record_sha256",
+    "runtime_sha256",
+    "record_sha256",
+    "runtime"
+  ]);
+
 
 function fail(message) {
   throw new Error(message);
 }
 
+
 function canonicalize(value) {
   if (Array.isArray(value)) {
-    return `[${value.map(canonicalize).join(",")}]`;
+    return `[${value
+      .map(canonicalize)
+      .join(",")}]`;
   }
 
   if (
     value !== null &&
     typeof value === "object"
   ) {
-    const keys = Object.keys(value).sort();
+    const keys =
+      Object.keys(value).sort();
 
     return `{${keys
       .map(
@@ -57,17 +83,23 @@ function canonicalize(value) {
   return JSON.stringify(value);
 }
 
+
 function sha256(value) {
   return createHash("sha256")
-    .update(value, "utf8")
+    .update(
+      value,
+      "utf8"
+    )
     .digest("hex");
 }
+
 
 function deepClone(value) {
   return JSON.parse(
     JSON.stringify(value)
   );
 }
+
 
 function assertString(
   value,
@@ -79,21 +111,61 @@ function assertString(
     value.length === 0 ||
     value.length > maxLength
   ) {
-    fail(errorCode);
+    fail(
+      errorCode
+    );
   }
 }
 
-function assertRuntime(runtime) {
+
+function assertIsoDate(
+  value,
+  errorCode
+) {
+  if (
+    typeof value !== "string" ||
+    Number.isNaN(
+      Date.parse(value)
+    )
+  ) {
+    fail(
+      errorCode
+    );
+  }
+}
+
+
+function assertSha256(
+  value,
+  errorCode
+) {
+  if (
+    typeof value !== "string" ||
+    !SHA256_PATTERN.test(value)
+  ) {
+    fail(
+      errorCode
+    );
+  }
+}
+
+
+function assertRuntime(
+  runtime
+) {
   if (
     runtime === null ||
     typeof runtime !== "object" ||
     Array.isArray(runtime)
   ) {
-    fail("RUNTIME_INVALID_OBJECT");
+    fail(
+      "RUNTIME_INVALID_OBJECT"
+    );
   }
 
   if (
-    runtime.schema_version !== "1.0"
+    runtime.schema_version !==
+    "1.0"
   ) {
     fail(
       "RUNTIME_SCHEMA_VERSION_UNSUPPORTED"
@@ -101,12 +173,15 @@ function assertRuntime(runtime) {
   }
 
   if (
-    typeof runtime.runtime_id !== "string" ||
+    typeof runtime.runtime_id !==
+      "string" ||
     !RUNTIME_ID_PATTERN.test(
       runtime.runtime_id
     )
   ) {
-    fail("RUNTIME_ID_INVALID");
+    fail(
+      "RUNTIME_ID_INVALID"
+    );
   }
 
   if (
@@ -114,7 +189,9 @@ function assertRuntime(runtime) {
       runtime.runtime_type
     )
   ) {
-    fail("RUNTIME_TYPE_INVALID");
+    fail(
+      "RUNTIME_TYPE_INVALID"
+    );
   }
 
   if (
@@ -122,7 +199,9 @@ function assertRuntime(runtime) {
       runtime.status
     )
   ) {
-    fail("RUNTIME_STATUS_INVALID");
+    fail(
+      "RUNTIME_STATUS_INVALID"
+    );
   }
 
   assertString(
@@ -137,18 +216,14 @@ function assertRuntime(runtime) {
     128
   );
 
-  if (
-    typeof runtime.runtime_digest_sha256 !==
-      "string" ||
-    !SHA256_PATTERN.test(
-      runtime.runtime_digest_sha256
-    )
-  ) {
-    fail("RUNTIME_DIGEST_INVALID");
-  }
+  assertSha256(
+    runtime.runtime_digest_sha256,
+    "RUNTIME_DIGEST_INVALID"
+  );
 
   if (
-    runtime.ipr_reference !== undefined
+    runtime.ipr_reference !==
+    undefined
   ) {
     assertString(
       runtime.ipr_reference,
@@ -157,10 +232,13 @@ function assertRuntime(runtime) {
   }
 
   if (
-    runtime.capabilities !== undefined
+    runtime.capabilities !==
+    undefined
   ) {
     if (
-      !Array.isArray(runtime.capabilities)
+      !Array.isArray(
+        runtime.capabilities
+      )
     ) {
       fail(
         "RUNTIME_CAPABILITIES_INVALID"
@@ -179,7 +257,9 @@ function assertRuntime(runtime) {
     }
 
     if (
-      new Set(runtime.capabilities).size !==
+      new Set(
+        runtime.capabilities
+      ).size !==
       runtime.capabilities.length
     ) {
       fail(
@@ -189,12 +269,16 @@ function assertRuntime(runtime) {
   }
 
   if (
-    runtime.metadata !== undefined
+    runtime.metadata !==
+    undefined
   ) {
     if (
       runtime.metadata === null ||
-      typeof runtime.metadata !== "object" ||
-      Array.isArray(runtime.metadata)
+      typeof runtime.metadata !==
+        "object" ||
+      Array.isArray(
+        runtime.metadata
+      )
     ) {
       fail(
         "RUNTIME_METADATA_INVALID"
@@ -203,8 +287,15 @@ function assertRuntime(runtime) {
   }
 }
 
-function parseRegistry(registryPath) {
-  if (!existsSync(registryPath)) {
+
+function parseRegistry(
+  registryPath
+) {
+  if (
+    !existsSync(
+      registryPath
+    )
+  ) {
     return [];
   }
 
@@ -214,7 +305,9 @@ function parseRegistry(registryPath) {
       "utf8"
     );
 
-  if (raw.trim() === "") {
+  if (
+    raw.trim() === ""
+  ) {
     return [];
   }
 
@@ -225,6 +318,15 @@ function parseRegistry(registryPath) {
 
   const records = [];
 
+  const seenIds =
+    new Set();
+
+  let expectedPreviousRecordHash =
+    null;
+
+  let previousRecordedAtMs =
+    null;
+
   for (
     let index = 0;
     index < lines.length;
@@ -234,7 +336,9 @@ function parseRegistry(registryPath) {
 
     try {
       record =
-        JSON.parse(lines[index]);
+        JSON.parse(
+          lines[index]
+        );
     } catch {
       fail(
         `RUNTIME_REGISTRY_CORRUPT_JSON_LINE:${index + 1}`
@@ -244,21 +348,106 @@ function parseRegistry(registryPath) {
     if (
       record === null ||
       typeof record !== "object" ||
-      typeof record.runtime_id !==
-        "string" ||
-      typeof record.runtime_sha256 !==
-        "string" ||
-      record.runtime === null ||
-      typeof record.runtime !== "object"
+      Array.isArray(record)
     ) {
       fail(
         `RUNTIME_REGISTRY_CORRUPT_RECORD:${index + 1}`
       );
     }
 
-    assertRuntime(record.runtime);
+    for (
+      const key of
+      Object.keys(record)
+    ) {
+      if (
+        !ALLOWED_RECORD_KEYS.has(
+          key
+        )
+      ) {
+        fail(
+          `RUNTIME_REGISTRY_UNKNOWN_FIELD:${index + 1}:${key}`
+        );
+      }
+    }
 
-    const calculated =
+    if (
+      record.registry_version !==
+        "1.1" ||
+      record.record_type !==
+        "RUNTIME_REGISTERED" ||
+      typeof record.runtime_id !==
+        "string" ||
+      record.runtime === null ||
+      typeof record.runtime !==
+        "object" ||
+      Array.isArray(
+        record.runtime
+      )
+    ) {
+      fail(
+        `RUNTIME_REGISTRY_CORRUPT_RECORD:${index + 1}`
+      );
+    }
+
+    assertIsoDate(
+      record.recorded_at,
+      `RUNTIME_REGISTRY_RECORDED_AT_INVALID:${index + 1}`
+    );
+
+    assertString(
+      record.recorded_by,
+      `RUNTIME_REGISTRY_RECORDED_BY_INVALID:${index + 1}`
+    );
+
+    assertSha256(
+      record.runtime_sha256,
+      `RUNTIME_REGISTRY_RUNTIME_SHA256_INVALID:${index + 1}`
+    );
+
+    assertSha256(
+      record.record_sha256,
+      `RUNTIME_REGISTRY_RECORD_SHA256_INVALID:${index + 1}`
+    );
+
+    if (
+      record.previous_record_sha256 !==
+      null
+    ) {
+      assertSha256(
+        record.previous_record_sha256,
+        `RUNTIME_REGISTRY_PREVIOUS_SHA256_INVALID:${index + 1}`
+      );
+    }
+
+    if (
+      record.previous_record_sha256 !==
+      expectedPreviousRecordHash
+    ) {
+      fail(
+        `RUNTIME_REGISTRY_CHAIN_MISMATCH:${index + 1}`
+      );
+    }
+
+    const recordedAtMs =
+      Date.parse(
+        record.recorded_at
+      );
+
+    if (
+      previousRecordedAtMs !== null &&
+      recordedAtMs <
+        previousRecordedAtMs
+    ) {
+      fail(
+        `RUNTIME_REGISTRY_TIME_ORDER_MISMATCH:${index + 1}`
+      );
+    }
+
+    assertRuntime(
+      record.runtime
+    );
+
+    const calculatedRuntimeHash =
       sha256(
         canonicalize(
           record.runtime
@@ -266,7 +455,7 @@ function parseRegistry(registryPath) {
       );
 
     if (
-      calculated !==
+      calculatedRuntimeHash !==
       record.runtime_sha256
     ) {
       fail(
@@ -283,23 +472,91 @@ function parseRegistry(registryPath) {
       );
     }
 
-    records.push(record);
+    const recordHashBasis = {
+      registry_version:
+        record.registry_version,
+
+      record_type:
+        record.record_type,
+
+      runtime_id:
+        record.runtime_id,
+
+      recorded_at:
+        record.recorded_at,
+
+      recorded_by:
+        record.recorded_by,
+
+      previous_record_sha256:
+        record.previous_record_sha256,
+
+      runtime_sha256:
+        record.runtime_sha256,
+
+      runtime:
+        record.runtime
+    };
+
+    const calculatedRecordHash =
+      sha256(
+        canonicalize(
+          recordHashBasis
+        )
+      );
+
+    if (
+      calculatedRecordHash !==
+      record.record_sha256
+    ) {
+      fail(
+        `RUNTIME_REGISTRY_RECORD_HASH_MISMATCH:${index + 1}`
+      );
+    }
+
+    if (
+      seenIds.has(
+        record.runtime_id
+      )
+    ) {
+      fail(
+        "RUNTIME_REGISTRY_DUPLICATE_ID"
+      );
+    }
+
+    seenIds.add(
+      record.runtime_id
+    );
+
+    records.push(
+      record
+    );
+
+    expectedPreviousRecordHash =
+      record.record_sha256;
+
+    previousRecordedAtMs =
+      recordedAtMs;
   }
 
   return records;
 }
 
-function acquireLock(registryPath) {
+
+function acquireLock(
+  registryPath
+) {
   const lockPath =
     `${registryPath}.lock`;
 
   let fd;
 
   try {
-    fd = openSync(
-      lockPath,
-      "wx"
-    );
+    fd =
+      openSync(
+        lockPath,
+        "wx"
+      );
   } catch {
     fail(
       "RUNTIME_REGISTRY_LOCKED"
@@ -312,12 +569,19 @@ function acquireLock(registryPath) {
   };
 }
 
-function releaseLock(lock) {
+
+function releaseLock(
+  lock
+) {
   try {
-    closeSync(lock.fd);
+    closeSync(
+      lock.fd
+    );
   } finally {
     if (
-      existsSync(lock.lockPath)
+      existsSync(
+        lock.lockPath
+      )
     ) {
       unlinkSync(
         lock.lockPath
@@ -325,6 +589,7 @@ function releaseLock(lock) {
     }
   }
 }
+
 
 export function registerRuntime({
   registryPath,
@@ -337,18 +602,14 @@ export function registerRuntime({
     "RUNTIME_REGISTRY_PATH_REQUIRED"
   );
 
-  assertRuntime(runtime);
+  assertRuntime(
+    runtime
+  );
 
-  if (
-    typeof recordedAt !== "string" ||
-    Number.isNaN(
-      Date.parse(recordedAt)
-    )
-  ) {
-    fail(
-      "RUNTIME_RECORDED_AT_INVALID"
-    );
-  }
+  assertIsoDate(
+    recordedAt,
+    "RUNTIME_RECORDED_AT_INVALID"
+  );
 
   assertString(
     recordedBy,
@@ -356,10 +617,14 @@ export function registerRuntime({
   );
 
   const immutableRuntime =
-    deepClone(runtime);
+    deepClone(
+      runtime
+    );
 
   const lock =
-    acquireLock(registryPath);
+    acquireLock(
+      registryPath
+    );
 
   try {
     const records =
@@ -379,6 +644,22 @@ export function registerRuntime({
       );
     }
 
+    if (
+      records.length > 0 &&
+      Date.parse(
+        recordedAt
+      ) <
+      Date.parse(
+        records[
+          records.length - 1
+        ].recorded_at
+      )
+    ) {
+      fail(
+        "RUNTIME_RECORDED_AT_ORDER_INVALID"
+      );
+    }
+
     const runtimeHash =
       sha256(
         canonicalize(
@@ -386,8 +667,16 @@ export function registerRuntime({
         )
       );
 
-    const record = {
-      registry_version: "1.0",
+    const previousRecordHash =
+      records.length === 0
+        ? null
+        : records[
+            records.length - 1
+          ].record_sha256;
+
+    const recordHashBasis = {
+      registry_version:
+        "1.1",
 
       record_type:
         "RUNTIME_REGISTERED",
@@ -401,6 +690,9 @@ export function registerRuntime({
       recorded_by:
         recordedBy,
 
+      previous_record_sha256:
+        previousRecordHash,
+
       runtime_sha256:
         runtimeHash,
 
@@ -408,32 +700,57 @@ export function registerRuntime({
         immutableRuntime
     };
 
+    const recordHash =
+      sha256(
+        canonicalize(
+          recordHashBasis
+        )
+      );
+
+    const record = {
+      ...recordHashBasis,
+
+      record_sha256:
+        recordHash
+    };
+
     appendFileSync(
       registryPath,
       `${JSON.stringify(record)}\n`,
       {
-        encoding: "utf8",
-        flag: "a"
+        encoding:
+          "utf8",
+
+        flag:
+          "a"
       }
     );
 
-    return deepClone(record);
+    return deepClone(
+      record
+    );
   } finally {
-    releaseLock(lock);
+    releaseLock(
+      lock
+    );
   }
 }
+
 
 export function getRuntime({
   registryPath,
   runtimeId
 }) {
   if (
-    typeof runtimeId !== "string" ||
+    typeof runtimeId !==
+      "string" ||
     !RUNTIME_ID_PATTERN.test(
       runtimeId
     )
   ) {
-    fail("RUNTIME_ID_INVALID");
+    fail(
+      "RUNTIME_ID_INVALID"
+    );
   }
 
   const records =
@@ -449,9 +766,12 @@ export function getRuntime({
     );
 
   return record
-    ? deepClone(record)
+    ? deepClone(
+        record
+      )
     : null;
 }
+
 
 export function listRuntimes({
   registryPath
@@ -463,6 +783,7 @@ export function listRuntimes({
   );
 }
 
+
 export function verifyRuntimeRegistry({
   registryPath
 }) {
@@ -471,33 +792,22 @@ export function verifyRuntimeRegistry({
       registryPath
     );
 
-  const seen =
-    new Set();
-
-  for (
-    const record of records
-  ) {
-    if (
-      seen.has(
-        record.runtime_id
-      )
-    ) {
-      fail(
-        "RUNTIME_REGISTRY_DUPLICATE_ID"
-      );
-    }
-
-    seen.add(
-      record.runtime_id
-    );
-  }
-
   return {
-    valid: true,
+    valid:
+      true,
+
     record_count:
-      records.length
+      records.length,
+
+    head_record_sha256:
+      records.length === 0
+        ? null
+        : records[
+            records.length - 1
+          ].record_sha256
   };
 }
+
 
 export function assertRuntimeBinding({
   registryPath,
@@ -516,6 +826,7 @@ export function assertRuntimeBinding({
   const record =
     getRuntime({
       registryPath,
+
       runtimeId:
         binding.runtime_id
     });
@@ -530,7 +841,8 @@ export function assertRuntimeBinding({
     record.runtime;
 
   if (
-    runtime.status !== "ACTIVE"
+    runtime.status !==
+    "ACTIVE"
   ) {
     fail(
       "RUNTIME_NOT_ACTIVE"
@@ -539,9 +851,9 @@ export function assertRuntimeBinding({
 
   if (
     binding.runtime_type !==
-    undefined &&
+      undefined &&
     binding.runtime_type !==
-    runtime.runtime_type
+      runtime.runtime_type
   ) {
     fail(
       "RUNTIME_TYPE_MISMATCH"
@@ -550,9 +862,9 @@ export function assertRuntimeBinding({
 
   if (
     binding.runtime_version !==
-    undefined &&
+      undefined &&
     binding.runtime_version !==
-    runtime.runtime_version
+      runtime.runtime_version
   ) {
     fail(
       "RUNTIME_VERSION_MISMATCH"
@@ -561,9 +873,9 @@ export function assertRuntimeBinding({
 
   if (
     binding.runtime_digest_sha256 !==
-    undefined &&
+      undefined &&
     binding.runtime_digest_sha256 !==
-    runtime.runtime_digest_sha256
+      runtime.runtime_digest_sha256
   ) {
     fail(
       "RUNTIME_DIGEST_MISMATCH"
@@ -571,9 +883,12 @@ export function assertRuntimeBinding({
   }
 
   return {
-    valid: true,
+    valid:
+      true,
+
     runtime_id:
       runtime.runtime_id,
+
     runtime_sha256:
       record.runtime_sha256
   };
