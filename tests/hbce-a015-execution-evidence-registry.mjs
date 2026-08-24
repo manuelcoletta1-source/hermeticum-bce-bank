@@ -20,6 +20,11 @@ import {
 
 
 import {
+  hashCanonicalArtifact
+} from "../protocol/hbce-authorization-evaluator.reference.mjs";
+
+
+import {
   appendExecutionEvidence,
   getExecutionEvidence,
   listExecutionEvidence,
@@ -137,6 +142,21 @@ function prepareFixture(
     }
   );
 
+  const runtimeBinding = {
+    runtime_id:
+      "A27",
+
+    runtime_type:
+      "AI_AGENT",
+
+    runtime_version:
+      "1.0",
+
+    runtime_digest_sha256:
+      "c".repeat(64)
+  };
+
+
   const authorization = {
     authorization_id:
       `AUTHORIZATION-A015-${suffix}`,
@@ -180,6 +200,11 @@ function prepareFixture(
       evaluationEvtSha256:
         evtSha,
 
+      presentedRuntimeBindingSha256:
+        hashCanonicalArtifact(
+          runtimeBinding
+        ),
+
       consumedAt:
         "2026-08-24T10:05:00Z",
 
@@ -191,6 +216,7 @@ function prepareFixture(
   return {
     ...fixture,
     authorization,
+    runtimeBinding,
     evtId,
     evtSha,
     consumption
@@ -261,17 +287,7 @@ function baseAttempt(
       "b".repeat(64),
 
     runtime_binding: {
-      runtime_id:
-        "A27",
-
-      runtime_type:
-        "AI_AGENT",
-
-      runtime_version:
-        "1.0",
-
-      runtime_digest_sha256:
-        "c".repeat(64)
+      ...fixture.runtimeBinding
     },
 
     execution_payload_sha256:
@@ -1981,6 +1997,56 @@ try {
   }
 
 
+  /*
+   * =====================================================
+   * 16. INITIAL EXECUTION RUNTIME MUST MATCH ADMISSION
+   * =====================================================
+   */
+
+  {
+    const fixture =
+      prepareFixture(
+        "INITIALADMISSIONRUNTIME"
+      );
+
+
+    const attempt =
+      baseAttempt(
+        fixture
+      );
+
+
+    attempt.runtime_binding = {
+      ...attempt.runtime_binding,
+
+      runtime_id:
+        "A28"
+    };
+
+
+    expectError(
+      "A015_INITIAL_ADMISSION_RUNTIME_SUBSTITUTION_DENIED",
+
+      () =>
+        appendExecutionEvidence({
+          registryPath:
+            fixture.executionRegistryPath,
+
+          consumptionRegistryPath:
+            fixture.consumptionRegistryPath,
+
+          evidence:
+            attempt,
+
+          appendedAt:
+            "2026-08-24T10:06:02Z"
+        }),
+
+      "EXECUTION_ADMISSION_RUNTIME_BINDING_MISMATCH"
+    );
+  }
+
+
   console.log("");
   console.log(
     "===== A015 FINAL MATRIX ====="
@@ -2028,6 +2094,10 @@ try {
 
   console.log(
     "RUNTIME_SUBSTITUTION=DENIED"
+  );
+
+  console.log(
+    "INITIAL_ADMISSION_RUNTIME_SUBSTITUTION=DENIED"
   );
 
   console.log(

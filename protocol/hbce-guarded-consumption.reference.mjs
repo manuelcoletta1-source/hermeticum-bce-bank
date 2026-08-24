@@ -3,7 +3,8 @@ import {
 } from "./hbce-revocation.reference.mjs";
 
 import {
-  evaluateAuthorization
+  evaluateAuthorization,
+  hashCanonicalArtifact
 } from "./hbce-authorization-evaluator.reference.mjs";
 
 import {
@@ -383,6 +384,12 @@ export function guardedConsumeAuthorization({
   );
 
 
+  const presentedRuntimeBindingSha256 =
+    hashCanonicalArtifact(
+      presentedRuntimeBinding
+    );
+
+
   /*
    * 6. REVOCATION STATE MUST NOT CHANGE WHILE THE
    *    CURRENT RECHECK IS BEING PERFORMED.
@@ -428,6 +435,8 @@ export function guardedConsumeAuthorization({
 
       evaluationEvtSha256:
         historical.evt_sha256,
+
+      presentedRuntimeBindingSha256,
 
       consumedAt:
         claimAt,
@@ -505,7 +514,9 @@ export function guardedConsumeAuthorization({
     persisted.evaluation_evt_id !==
       historical.evt_id ||
     persisted.evaluation_evt_sha256 !==
-      historical.evt_sha256
+      historical.evt_sha256 ||
+    persisted.presented_runtime_binding_sha256 !==
+      presentedRuntimeBindingSha256
   ) {
     fail(
       "GUARDED_CONSUMPTION_RECORD_MISMATCH"
@@ -534,6 +545,9 @@ export function guardedConsumeAuthorization({
 
     presented_runtime_binding_verified:
       true,
+
+    presented_runtime_binding_sha256:
+      presentedRuntimeBindingSha256,
 
     revocation_state_stable_across_claim:
       true,

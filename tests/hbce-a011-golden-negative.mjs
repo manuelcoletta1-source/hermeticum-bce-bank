@@ -1227,6 +1227,12 @@ try {
       receipt
         .presented_runtime_binding_verified !==
         true ||
+      receipt
+        .presented_runtime_binding_sha256 !==
+        hashCanonicalArtifact(
+          fixture.authorization
+            .runtime_binding
+        ) ||
       receipt.single_use_consumed !==
         true ||
       receipt.execution_not_performed !==

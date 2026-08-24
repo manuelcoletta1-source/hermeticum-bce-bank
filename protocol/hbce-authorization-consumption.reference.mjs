@@ -34,6 +34,7 @@ const ALLOWED_RECORD_KEYS =
     "authorization_sha256",
     "evaluation_evt_id",
     "evaluation_evt_sha256",
+    "presented_runtime_binding_sha256",
     "consumed_at",
     "consumed_by",
     "previous_record_sha256",
@@ -303,22 +304,59 @@ function parseRegistry(
     }
 
     if (
+      (
+        record.registry_version !==
+          "1.0" &&
+        record.registry_version !==
+          "1.1"
+      ) ||
+      record.record_type !==
+        "AUTHORIZATION_CONSUMED"
+    ) {
+      fail(
+        `CONSUMPTION_REGISTRY_RECORD_TYPE_INVALID:${index + 1}`
+      );
+    }
+
+    const isV11 =
+      record.registry_version ===
+        "1.1";
+
+    const expectedFieldCount =
+      isV11
+        ? ALLOWED_RECORD_KEYS.size
+        : ALLOWED_RECORD_KEYS.size - 1;
+
+    if (
       Object.keys(record).length !==
-      ALLOWED_RECORD_KEYS.size
+      expectedFieldCount
     ) {
       fail(
         `CONSUMPTION_REGISTRY_FIELD_SET_INVALID:${index + 1}`
       );
     }
 
+    const hasAdmissionBinding =
+      Object.prototype.hasOwnProperty.call(
+        record,
+        "presented_runtime_binding_sha256"
+      );
+
     if (
-      record.registry_version !==
-        "1.0" ||
-      record.record_type !==
-        "AUTHORIZATION_CONSUMED"
+      !isV11 &&
+      hasAdmissionBinding
     ) {
       fail(
-        `CONSUMPTION_REGISTRY_RECORD_TYPE_INVALID:${index + 1}`
+        `CONSUMPTION_REGISTRY_V1_0_ADMISSION_FIELD_FORBIDDEN:${index + 1}`
+      );
+    }
+
+    if (
+      isV11 &&
+      !hasAdmissionBinding
+    ) {
+      fail(
+        `CONSUMPTION_REGISTRY_V1_1_ADMISSION_FIELD_REQUIRED:${index + 1}`
       );
     }
 
@@ -367,6 +405,13 @@ function parseRegistry(
       record.evaluation_evt_sha256,
       `CONSUMPTION_REGISTRY_EVT_SHA256_INVALID:${index + 1}`
     );
+
+    if (isV11) {
+      assertSha256(
+        record.presented_runtime_binding_sha256,
+        `CONSUMPTION_REGISTRY_PRESENTED_RUNTIME_SHA256_INVALID:${index + 1}`
+      );
+    }
 
     assertIsoDate(
       record.consumed_at,
@@ -438,6 +483,13 @@ function parseRegistry(
 
       evaluation_evt_sha256:
         record.evaluation_evt_sha256,
+
+      ...(isV11
+        ? {
+            presented_runtime_binding_sha256:
+              record.presented_runtime_binding_sha256
+          }
+        : {}),
 
       consumed_at:
         record.consumed_at,
@@ -562,6 +614,8 @@ export function consumeAuthorization({
   evaluationEvtId,
   evaluationEvtSha256,
 
+  presentedRuntimeBindingSha256,
+
   consumedAt,
   consumedBy
 }) {
@@ -601,6 +655,11 @@ export function consumeAuthorization({
   assertSha256(
     evaluationEvtSha256,
     "CONSUMPTION_EVT_SHA256_INVALID"
+  );
+
+  assertSha256(
+    presentedRuntimeBindingSha256,
+    "CONSUMPTION_PRESENTED_RUNTIME_BINDING_SHA256_INVALID"
   );
 
   assertIsoDate(
@@ -714,7 +773,7 @@ export function consumeAuthorization({
 
     const recordHashBasis = {
       registry_version:
-        "1.0",
+        "1.1",
 
       record_type:
         "AUTHORIZATION_CONSUMED",
@@ -734,6 +793,9 @@ export function consumeAuthorization({
 
       evaluation_evt_sha256:
         evaluationEvtSha256,
+
+      presented_runtime_binding_sha256:
+        presentedRuntimeBindingSha256,
 
       consumed_at:
         consumedAt,

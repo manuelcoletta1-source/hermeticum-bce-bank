@@ -1515,6 +1515,58 @@ function assertConsumptionBinding(
   }
 
 
+  /*
+   * Admission-runtime continuity is established at the
+   * first execution evidence only.
+   *
+   * Later evidence stages inherit runtime continuity from
+   * assertExecutionTransition(), which compares each stage
+   * against the previously recorded execution evidence.
+   *
+   * This preserves distinct failure semantics:
+   *
+   * admission substitution
+   *   -> EXECUTION_ADMISSION_RUNTIME_BINDING_MISMATCH
+   *
+   * post-admission stage substitution
+   *   -> EXECUTION_RUNTIME_BINDING_MISMATCH
+   */
+
+  if (
+    evidence.evidence_type ===
+      "EXECUTION_ATTEMPTED"
+  ) {
+    if (
+      consumption.registry_version !==
+        "1.1" ||
+      typeof consumption
+        .presented_runtime_binding_sha256 !==
+        "string"
+    ) {
+      fail(
+        "EXECUTION_ADMISSION_BINDING_REQUIRED"
+      );
+    }
+
+
+    const executionRuntimeBindingSha256 =
+      sha256Canonical(
+        evidence.runtime_binding
+      );
+
+
+    if (
+      executionRuntimeBindingSha256 !==
+        consumption
+          .presented_runtime_binding_sha256
+    ) {
+      fail(
+        "EXECUTION_ADMISSION_RUNTIME_BINDING_MISMATCH"
+      );
+    }
+  }
+
+
   return consumption;
 }
 
