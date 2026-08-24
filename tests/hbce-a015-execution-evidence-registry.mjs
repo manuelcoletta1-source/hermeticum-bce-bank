@@ -683,6 +683,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           attempt,
 
@@ -710,6 +713,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           accepted,
@@ -739,6 +745,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           completed,
 
@@ -766,6 +775,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           outcome,
@@ -802,7 +814,10 @@ try {
           fixture.executionRegistryPath,
 
         consumptionRegistryPath:
-          fixture.consumptionRegistryPath
+          fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath
       });
 
 
@@ -934,6 +949,9 @@ try {
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
 
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
+
           evidence:
             accepted,
 
@@ -972,6 +990,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           attempt,
@@ -1022,6 +1043,9 @@ try {
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
 
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
+
           evidence:
             completed,
 
@@ -1060,6 +1084,9 @@ try {
       consumptionRegistryPath:
         fixture.consumptionRegistryPath,
 
+      admissionTrustRegistryPath:
+        fixture.admissionTrustRegistryPath,
+
       evidence:
         attempt,
 
@@ -1089,6 +1116,9 @@ try {
 
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
 
           evidence:
             accepted,
@@ -1129,6 +1159,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           attempt,
 
@@ -1162,6 +1195,9 @@ try {
 
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
 
           evidence:
             accepted,
@@ -1213,6 +1249,9 @@ try {
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
 
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
+
           evidence:
             attempt,
 
@@ -1261,6 +1300,9 @@ try {
       consumptionRegistryPath:
         fixture.consumptionRegistryPath,
 
+      admissionTrustRegistryPath:
+        fixture.admissionTrustRegistryPath,
+
       evidence:
         first,
 
@@ -1295,6 +1337,9 @@ try {
 
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
 
           evidence:
             second,
@@ -1335,6 +1380,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           attempt,
 
@@ -1360,6 +1408,9 @@ try {
 
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
 
           evidence:
             accepted,
@@ -1400,6 +1451,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           attempt,
 
@@ -1422,6 +1476,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           accepted,
@@ -1446,6 +1503,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           completed,
 
@@ -1468,6 +1528,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           outcome,
@@ -1507,6 +1570,9 @@ try {
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
 
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
+
           evidence:
             impossible,
 
@@ -1544,6 +1610,9 @@ try {
 
       consumptionRegistryPath:
         fixture.consumptionRegistryPath,
+
+      admissionTrustRegistryPath:
+        fixture.admissionTrustRegistryPath,
 
       evidence:
         attempt,
@@ -1587,7 +1656,10 @@ try {
             fixture.executionRegistryPath,
 
           consumptionRegistryPath:
-            fixture.consumptionRegistryPath
+            fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath
         }),
 
       "EXECUTION_REGISTRY_EVIDENCE_HASH_MISMATCH:1"
@@ -1622,6 +1694,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           attempt,
 
@@ -1643,6 +1718,9 @@ try {
 
       consumptionRegistryPath:
         fixture.consumptionRegistryPath,
+
+      admissionTrustRegistryPath:
+        fixture.admissionTrustRegistryPath,
 
       evidence:
         accepted,
@@ -1691,7 +1769,10 @@ try {
             fixture.executionRegistryPath,
 
           consumptionRegistryPath:
-            fixture.consumptionRegistryPath
+            fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath
         }),
 
       "EXECUTION_REGISTRY_CHAIN_MISMATCH:2"
@@ -1734,6 +1815,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           attempt,
 
@@ -1767,6 +1851,9 @@ try {
 
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
 
           evidence:
             accepted,
@@ -1806,6 +1893,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           attempt,
@@ -1879,6 +1969,9 @@ try {
       consumptionRegistryPath:
         fixture.consumptionRegistryPath,
 
+      admissionTrustRegistryPath:
+        fixture.admissionTrustRegistryPath,
+
       evidence:
         rejected,
 
@@ -1920,6 +2013,9 @@ try {
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
 
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
+
         evidence:
           attempt,
 
@@ -1942,6 +2038,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           accepted,
@@ -2010,6 +2109,9 @@ try {
       consumptionRegistryPath:
         fixture.consumptionRegistryPath,
 
+      admissionTrustRegistryPath:
+        fixture.admissionTrustRegistryPath,
+
       evidence:
         failed,
 
@@ -2050,6 +2152,9 @@ try {
 
         consumptionRegistryPath:
           fixture.consumptionRegistryPath,
+
+        admissionTrustRegistryPath:
+          fixture.admissionTrustRegistryPath,
 
         evidence:
           attempt,
@@ -2127,6 +2232,9 @@ try {
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
 
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
+
           evidence:
             impossibleSuccess,
 
@@ -2176,6 +2284,9 @@ try {
 
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
+
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
 
           evidence:
             attempt,

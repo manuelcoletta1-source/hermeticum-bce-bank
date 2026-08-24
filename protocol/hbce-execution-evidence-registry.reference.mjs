@@ -18,6 +18,11 @@ import {
 } from "./hbce-authorization-consumption.reference.mjs";
 
 
+import {
+  verifyAdmissionConsumptionSignature
+} from "./hbce-admission-signature.reference.mjs";
+
+
 const SHA256_PATTERN =
   /^[a-f0-9]{64}$/;
 
@@ -1420,9 +1425,74 @@ function assertExecutionTransition(
 }
 
 
+function assertAdmissionProvenanceCryptographic(
+  consumption,
+  admissionTrustRegistryPath
+) {
+  assertString(
+    admissionTrustRegistryPath,
+    "EXECUTION_ADMISSION_TRUST_REGISTRY_PATH_REQUIRED"
+  );
+
+
+  let verification;
+
+
+  try {
+    verification =
+      verifyAdmissionConsumptionSignature({
+        record:
+          consumption,
+
+        trustRegistryPath:
+          admissionTrustRegistryPath
+      });
+  } catch {
+    /*
+     * Do not leak lower-layer parser, trust-registry or
+     * cryptographic diagnostics through the execution
+     * admission decision surface.
+     */
+    fail(
+      "EXECUTION_ADMISSION_PROVENANCE_CRYPTOGRAPHIC_VERIFY_FAILED"
+    );
+  }
+
+
+  if (
+    verification.valid !==
+      true ||
+    verification.signature_valid !==
+      true ||
+    verification.key_control_proven !==
+      true ||
+    verification.trusted_as_of_consumed_at !==
+      true ||
+    verification.signer_id !==
+      consumption.admission_signer_id ||
+    verification.key_id !==
+      consumption.admission_key_id ||
+    verification.public_key_sha256 !==
+      consumption.admission_public_key_sha256 ||
+    verification.trust_record_sha256 !==
+      consumption.admission_trust_record_sha256 ||
+    verification.signed_payload_sha256 !==
+      consumption.admission_signed_payload_sha256
+  ) {
+    fail(
+      "EXECUTION_ADMISSION_PROVENANCE_CRYPTOGRAPHIC_VERIFY_FAILED"
+    );
+  }
+
+
+  return verification;
+}
+
+
 function assertConsumptionBinding(
   evidence,
-  consumptionRegistryPath
+  consumptionRegistryPath,
+  admissionTrustRegistryPath
 ) {
   assertString(
     consumptionRegistryPath,
@@ -1571,18 +1641,25 @@ function assertConsumptionBinding(
 
 
     /*
-     * A017.2D1 establishes structural provenance admission:
+     * A018 independently verifies admission provenance at
+     * the execution boundary.
      *
-     * EXECUTION_ATTEMPTED requires an A012 v1.2
-     * signed-consumption record.
+     * The execution consumer does not trust the fact that
+     * A012/A013 previously verified the signature.
      *
-     * This boundary deliberately does not yet receive the
-     * admission trust registry and therefore does not
-     * independently re-run Ed25519 verification here.
+     * It reconstructs and verifies the signed admission
+     * consumption again against the bound historical trust
+     * state as-of consumed_at.
      *
-     * Independent cryptographic execution-boundary
-     * verification is reserved for A018.
+     * This does not prove current signer trust at execution
+     * time and does not establish trusted external time.
      */
+
+
+    assertAdmissionProvenanceCryptographic(
+      consumption,
+      admissionTrustRegistryPath
+    );
 
 
     const executionRuntimeBindingSha256 =
@@ -2149,6 +2226,7 @@ function parseRegistry(
 export function appendExecutionEvidence({
   registryPath,
   consumptionRegistryPath,
+  admissionTrustRegistryPath,
   evidence,
   appendedAt
 }) {
@@ -2182,7 +2260,8 @@ export function appendExecutionEvidence({
   const consumption =
     assertConsumptionBinding(
       immutableEvidence,
-      consumptionRegistryPath
+      consumptionRegistryPath,
+      admissionTrustRegistryPath
     );
 
 
@@ -2452,11 +2531,17 @@ export function listExecutionEvidenceForExecution({
 
 export function verifyExecutionEvidenceRegistry({
   registryPath,
-  consumptionRegistryPath
+  consumptionRegistryPath,
+  admissionTrustRegistryPath
 }) {
   assertString(
     consumptionRegistryPath,
     "EXECUTION_CONSUMPTION_REGISTRY_PATH_REQUIRED"
+  );
+
+  assertString(
+    admissionTrustRegistryPath,
+    "EXECUTION_ADMISSION_TRUST_REGISTRY_PATH_REQUIRED"
   );
 
 
@@ -2472,7 +2557,8 @@ export function verifyExecutionEvidenceRegistry({
   ) {
     assertConsumptionBinding(
       record.evidence,
-      consumptionRegistryPath
+      consumptionRegistryPath,
+      admissionTrustRegistryPath
     );
   }
 

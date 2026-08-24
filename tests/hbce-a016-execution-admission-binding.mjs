@@ -569,6 +569,8 @@ try {
 
         consumptionRegistryPath,
 
+        admissionTrustRegistryPath,
+
         evidence:
           legacyAttempt,
 
@@ -790,6 +792,8 @@ try {
 
     consumptionRegistryPath,
 
+    admissionTrustRegistryPath,
+
     evidence:
       matchingAttempt,
 
@@ -803,7 +807,9 @@ try {
       registryPath:
         executionRegistryPath,
 
-      consumptionRegistryPath
+      consumptionRegistryPath,
+
+      admissionTrustRegistryPath
     });
 
 
@@ -912,6 +918,8 @@ try {
           mismatchExecutionRegistryPath,
 
         consumptionRegistryPath,
+
+        admissionTrustRegistryPath,
 
         evidence:
           mismatchAttempt,
@@ -1033,7 +1041,11 @@ try {
   );
 
   console.log(
-    "EXECUTION_BOUNDARY_INDEPENDENT_SIGNATURE_VERIFY=NOT_YET_ENFORCED"
+    "EXECUTION_BOUNDARY_INDEPENDENT_SIGNATURE_VERIFY=ENFORCED"
+  );
+
+  console.log(
+    "EXECUTION_BOUNDARY_HISTORICAL_TRUST_RECHECK=ENFORCED"
   );
 
   console.log(

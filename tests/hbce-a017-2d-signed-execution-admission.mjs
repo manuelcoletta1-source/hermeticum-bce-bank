@@ -233,6 +233,13 @@ try {
   };
 
 
+  const trustPath =
+    join(
+      root,
+      "trust.jsonl"
+    );
+
+
   /*
    * 1. Historical unsigned 1.1 is readable by A012,
    *    but insufficient for NEW execution admission.
@@ -317,6 +324,9 @@ try {
         consumptionRegistryPath:
           legacyConsumptionPath,
 
+        admissionTrustRegistryPath:
+          trustPath,
+
         evidence:
           makeAttempt({
             suffix:
@@ -340,12 +350,6 @@ try {
   /*
    * 2. Build trusted signer and signed 1.2 consumption.
    */
-
-  const trustPath =
-    join(
-      root,
-      "trust.jsonl"
-    );
 
   const signedConsumptionPath =
     join(
@@ -518,7 +522,7 @@ try {
 
 
   /*
-   * 3. Signed 1.2 is structurally admissible.
+   * 3. Signed 1.2 is cryptographically admissible.
    */
 
   appendExecutionEvidence({
@@ -527,6 +531,9 @@ try {
 
     consumptionRegistryPath:
       signedConsumptionPath,
+
+    admissionTrustRegistryPath:
+      trustPath,
 
     evidence:
       makeAttempt({
@@ -551,7 +558,10 @@ try {
         signedExecutionPath,
 
       consumptionRegistryPath:
-        signedConsumptionPath
+        signedConsumptionPath,
+
+      admissionTrustRegistryPath:
+        trustPath
     });
 
 
@@ -589,6 +599,9 @@ try {
 
         consumptionRegistryPath:
           signedConsumptionPath,
+
+        admissionTrustRegistryPath:
+          trustPath,
 
         evidence:
           makeAttempt({
@@ -636,11 +649,11 @@ try {
   );
 
   console.log(
-    "INDEPENDENT_ED25519_EXECUTION_VERIFY=NOT_IMPLEMENTED_YET"
+    "INDEPENDENT_ED25519_EXECUTION_VERIFY=ENFORCED"
   );
 
   console.log(
-    "TRUST_REGISTRY_EXECUTION_RECHECK=NOT_IMPLEMENTED_YET"
+    "TRUST_REGISTRY_EXECUTION_RECHECK=ENFORCED"
   );
 
   console.log(
