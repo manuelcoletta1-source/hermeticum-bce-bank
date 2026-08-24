@@ -6,6 +6,12 @@ import {
 } from "node:fs";
 
 import {
+  createHash,
+  generateKeyPairSync,
+  sign
+} from "node:crypto";
+
+import {
   tmpdir
 } from "node:os";
 
@@ -17,6 +23,10 @@ import {
 import {
   consumeAuthorization
 } from "../protocol/hbce-authorization-consumption.reference.mjs";
+
+import {
+  registerAdmissionSignerKey
+} from "../protocol/hbce-admission-signer-trust.reference.mjs";
 
 
 import {
@@ -40,6 +50,49 @@ const root =
       "hbce-a015-"
     )
   );
+
+
+const {
+  publicKey:
+    admissionPublicKey,
+
+  privateKey:
+    admissionPrivateKey
+} =
+  generateKeyPairSync(
+    "ed25519"
+  );
+
+
+const admissionPublicKeyDer =
+  admissionPublicKey.export({
+    type:
+      "spki",
+
+    format:
+      "der"
+  });
+
+
+const admissionPublicKeySha256 =
+  createHash(
+    "sha256"
+  )
+    .update(
+      admissionPublicKeyDer
+    )
+    .digest("hex");
+
+
+function signAdmissionPayload(
+  payloadBytes
+) {
+  return sign(
+    null,
+    payloadBytes,
+    admissionPrivateKey
+  );
+}
 
 
 function fail(message) {
@@ -97,6 +150,12 @@ function createFixture(
       "execution.jsonl"
     );
 
+  const admissionTrustRegistryPath =
+    join(
+      dir,
+      "admission-trust.jsonl"
+    );
+
 
   writeFileSync(
     join(
@@ -116,7 +175,8 @@ function createFixture(
   return {
     dir,
     consumptionRegistryPath,
-    executionRegistryPath
+    executionRegistryPath,
+    admissionTrustRegistryPath
   };
 }
 
@@ -141,6 +201,63 @@ function prepareFixture(
         true
     }
   );
+
+  const admissionSignerId =
+    "ADMISSION-SIGNER-A015";
+
+  const admissionKeyId =
+    `ADMISSION-KEY-A015-${suffix}`;
+
+
+  registerAdmissionSignerKey({
+    registryPath:
+      fixture.admissionTrustRegistryPath,
+
+    trust: {
+      schema_version:
+        "1.0",
+
+      event_id:
+        `ADMISSION-TRUST-EVENT-A015-${suffix}`,
+
+      event_type:
+        "TRUSTED",
+
+      signer_id:
+        admissionSignerId,
+
+      key_id:
+        admissionKeyId,
+
+      scope:
+        "ADMISSION_CONSUMPTION_SIGNING",
+
+      algorithm:
+        "ED25519",
+
+      public_key_spki_der_base64:
+        admissionPublicKeyDer
+          .toString(
+            "base64"
+          ),
+
+      public_key_sha256:
+        admissionPublicKeySha256,
+
+      valid_from:
+        "2026-08-24T09:00:00Z",
+
+      valid_until:
+        "2026-08-24T12:00:00Z"
+    },
+
+    recordedAt:
+      "2026-08-24T09:00:00Z",
+
+    recordedBy:
+      "IPR-A015-TRUST-ADMIN"
+  });
+
 
   const runtimeBinding = {
     runtime_id:
@@ -209,8 +326,33 @@ function prepareFixture(
         "2026-08-24T10:05:00Z",
 
       consumedBy:
-        "IPR-BANK-001"
+        "IPR-BANK-001",
+
+      admissionTrustRegistryPath:
+        fixture.admissionTrustRegistryPath,
+
+      admissionSignerId,
+
+      admissionKeyId,
+
+      signAdmissionPayload
     });
+
+
+  if (
+    consumption.registry_version !==
+      "1.2" ||
+    consumption.admission_signer_id !==
+      admissionSignerId ||
+    consumption.admission_key_id !==
+      admissionKeyId ||
+    consumption.admission_signature_algorithm !==
+      "ED25519"
+  ) {
+    fail(
+      "A015_SIGNED_CONSUMPTION_FIXTURE_INVALID"
+    );
+  }
 
 
   return {

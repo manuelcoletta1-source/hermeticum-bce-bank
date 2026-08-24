@@ -1538,15 +1538,51 @@ function assertConsumptionBinding(
   ) {
     if (
       consumption.registry_version !==
-        "1.1" ||
+        "1.2" ||
       typeof consumption
         .presented_runtime_binding_sha256 !==
+        "string" ||
+      typeof consumption
+        .admission_signer_id !==
+        "string" ||
+      typeof consumption
+        .admission_key_id !==
+        "string" ||
+      typeof consumption
+        .admission_public_key_sha256 !==
+        "string" ||
+      typeof consumption
+        .admission_trust_record_sha256 !==
+        "string" ||
+      typeof consumption
+        .admission_signed_payload_sha256 !==
+        "string" ||
+      consumption
+        .admission_signature_algorithm !==
+        "ED25519" ||
+      typeof consumption
+        .admission_signature_base64 !==
         "string"
     ) {
       fail(
-        "EXECUTION_ADMISSION_BINDING_REQUIRED"
+        "EXECUTION_ADMISSION_SIGNED_CONSUMPTION_REQUIRED"
       );
     }
+
+
+    /*
+     * A017.2D1 establishes structural provenance admission:
+     *
+     * EXECUTION_ATTEMPTED requires an A012 v1.2
+     * signed-consumption record.
+     *
+     * This boundary deliberately does not yet receive the
+     * admission trust registry and therefore does not
+     * independently re-run Ed25519 verification here.
+     *
+     * Independent cryptographic execution-boundary
+     * verification is reserved for A018.
+     */
 
 
     const executionRuntimeBindingSha256 =

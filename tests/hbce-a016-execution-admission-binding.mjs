@@ -6,7 +6,9 @@ import {
 } from "node:fs";
 
 import {
-  createHash
+  createHash,
+  generateKeyPairSync,
+  sign
 } from "node:crypto";
 
 import {
@@ -30,6 +32,10 @@ import {
   verifyExecutionEvidenceRegistry
 } from "../protocol/hbce-execution-evidence-registry.reference.mjs";
 
+import {
+  registerAdmissionSignerKey
+} from "../protocol/hbce-admission-signer-trust.reference.mjs";
+
 
 const root =
   mkdtempSync(
@@ -38,6 +44,38 @@ const root =
       "hbce-a016-"
     )
   );
+
+
+const {
+  publicKey:
+    admissionPublicKey,
+
+  privateKey:
+    admissionPrivateKey
+} =
+  generateKeyPairSync(
+    "ed25519"
+  );
+
+
+const admissionPublicKeyDer =
+  admissionPublicKey.export({
+    type:
+      "spki",
+
+    format:
+      "der"
+  });
+
+
+const admissionPublicKeySha256 =
+  createHash(
+    "sha256"
+  )
+    .update(
+      admissionPublicKeyDer
+    )
+    .digest("hex");
 
 
 function fail(message) {
@@ -293,6 +331,90 @@ try {
       "execution-mismatch.jsonl"
     );
 
+  const admissionTrustRegistryPath =
+    join(
+      root,
+      "admission-trust.jsonl"
+    );
+
+
+  const admissionSignerId =
+    "ADMISSION-SIGNER-A016";
+
+  const admissionKeyId =
+    "ADMISSION-KEY-A016";
+
+
+  registerAdmissionSignerKey({
+    registryPath:
+      admissionTrustRegistryPath,
+
+    trust: {
+      schema_version:
+        "1.0",
+
+      event_id:
+        "ADMISSION-TRUST-EVENT-A016",
+
+      event_type:
+        "TRUSTED",
+
+      signer_id:
+        admissionSignerId,
+
+      key_id:
+        admissionKeyId,
+
+      scope:
+        "ADMISSION_CONSUMPTION_SIGNING",
+
+      algorithm:
+        "ED25519",
+
+      public_key_spki_der_base64:
+        admissionPublicKeyDer
+          .toString(
+            "base64"
+          ),
+
+      public_key_sha256:
+        admissionPublicKeySha256,
+
+      valid_from:
+        "2026-08-24T09:00:00Z",
+
+      valid_until:
+        "2026-08-24T12:00:00Z"
+    },
+
+    recordedAt:
+      "2026-08-24T09:00:00Z",
+
+    recordedBy:
+      "IPR-A016-TRUST-ADMIN"
+  });
+
+
+  function consumeSignedAuthorization(
+    args
+  ) {
+    return consumeAuthorization({
+      ...args,
+
+      admissionTrustRegistryPath,
+      admissionSignerId,
+      admissionKeyId,
+
+      signAdmissionPayload:
+        (payloadBytes) =>
+          sign(
+            null,
+            payloadBytes,
+            admissionPrivateKey
+          )
+    });
+  }
+
 
   /*
    * ===================================================
@@ -454,7 +576,7 @@ try {
           "2026-08-24T10:01:00Z"
       }),
 
-    "EXECUTION_ADMISSION_BINDING_REQUIRED"
+    "EXECUTION_ADMISSION_SIGNED_CONSUMPTION_REQUIRED"
   );
 
 
@@ -472,7 +594,7 @@ try {
 
 
   expectError(
-    "A016_V1_1_MISSING_ADMISSION_HASH_DENIED",
+    "A016_V1_2_MISSING_ADMISSION_HASH_DENIED",
 
     () =>
       consumeAuthorization({
@@ -507,7 +629,7 @@ try {
 
   /*
    * ===================================================
-   * 4. APPEND 1.1 AFTER HISTORICAL 1.0
+   * 4. APPEND SIGNED 1.2 AFTER HISTORICAL 1.0
    * ===================================================
    */
 
@@ -527,7 +649,7 @@ try {
 
 
   const currentConsumption =
-    consumeAuthorization({
+    consumeSignedAuthorization({
       registryPath:
         consumptionRegistryPath,
 
@@ -555,22 +677,43 @@ try {
 
   if (
     currentConsumption.registry_version !==
-      "1.1" ||
+      "1.2" ||
     currentConsumption
       .presented_runtime_binding_sha256 !==
       runtimeSha256 ||
     currentConsumption
       .previous_record_sha256 !==
-      legacyRecord.record_sha256
+      legacyRecord.record_sha256 ||
+    currentConsumption
+      .admission_signer_id !==
+      admissionSignerId ||
+    currentConsumption
+      .admission_key_id !==
+      admissionKeyId ||
+    currentConsumption
+      .admission_public_key_sha256 !==
+      admissionPublicKeySha256 ||
+    currentConsumption
+      .admission_signature_algorithm !==
+      "ED25519" ||
+    typeof currentConsumption
+      .admission_trust_record_sha256 !==
+      "string" ||
+    typeof currentConsumption
+      .admission_signed_payload_sha256 !==
+      "string" ||
+    typeof currentConsumption
+      .admission_signature_base64 !==
+      "string"
   ) {
     fail(
-      "A016_V1_1_RECORD_INVALID"
+      "A016_V1_2_RECORD_INVALID"
     );
   }
 
 
   console.log(
-    "A016_V1_1_RUNTIME_ADMISSION_WRITE=PASS"
+    "A016_V1_2_RUNTIME_ADMISSION_WRITE=PASS"
   );
 
 
@@ -597,7 +740,7 @@ try {
 
 
   console.log(
-    "A016_MIXED_V1_0_V1_1_CHAIN=PASS"
+    "A016_MIXED_V1_0_V1_2_CHAIN=PASS"
   );
 
 
@@ -699,7 +842,7 @@ try {
     );
 
   const mismatchConsumption =
-    consumeAuthorization({
+    consumeSignedAuthorization({
       registryPath:
         consumptionRegistryPath,
 
@@ -783,7 +926,7 @@ try {
 
   /*
    * ===================================================
-   * 7. ADMISSION HASH IS PART OF 1.1 RECORD HASH
+   * 7. ADMISSION HASH IS PART OF 1.2 SIGNED PAYLOAD
    * ===================================================
    */
 
@@ -836,7 +979,7 @@ try {
           tamperedPath
       }),
 
-    "CONSUMPTION_REGISTRY_RECORD_HASH_MISMATCH:2"
+    "CONSUMPTION_REGISTRY_SIGNED_PAYLOAD_HASH_MISMATCH:2"
   );
 
 
@@ -850,11 +993,11 @@ try {
   );
 
   console.log(
-    "NEW_V1_1_WRITE=PASS"
+    "NEW_V1_2_WRITE=PASS"
   );
 
   console.log(
-    "MIXED_V1_0_V1_1_CHAIN=PASS"
+    "MIXED_V1_0_V1_2_CHAIN=PASS"
   );
 
   console.log(
@@ -882,7 +1025,15 @@ try {
   );
 
   console.log(
-    "ADMISSION_ACTOR_CRYPTOGRAPHIC_AUTHENTICITY=NOT_PROVEN"
+    "ADMISSION_SIGNER_KEY_CONTROL=CRYPTOGRAPHICALLY_PROVEN"
+  );
+
+  console.log(
+    "CONSUMED_BY=SIGNED_CLAIM_NOT_INDEPENDENT_IDENTITY_PROOF"
+  );
+
+  console.log(
+    "EXECUTION_BOUNDARY_INDEPENDENT_SIGNATURE_VERIFY=NOT_YET_ENFORCED"
   );
 
   console.log(

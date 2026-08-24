@@ -22,6 +22,12 @@ import {
   spawn
 } from "node:child_process";
 
+import {
+  createHash,
+  generateKeyPairSync,
+  sign
+} from "node:crypto";
+
 
 import {
   registerMandate
@@ -58,6 +64,75 @@ import {
 import {
   guardedConsumeAuthorization
 } from "../protocol/hbce-guarded-consumption.reference.mjs";
+
+import {
+  registerAdmissionSignerKey
+} from "../protocol/hbce-admission-signer-trust.reference.mjs";
+
+import {
+  verifyAdmissionConsumptionSignature
+} from "../protocol/hbce-admission-signature.reference.mjs";
+
+
+const {
+  publicKey:
+    admissionPublicKey,
+
+  privateKey:
+    admissionPrivateKey
+} =
+  generateKeyPairSync(
+    "ed25519"
+  );
+
+
+const admissionPublicKeyDer =
+  admissionPublicKey.export({
+    type:
+      "spki",
+
+    format:
+      "der"
+  });
+
+
+const admissionPublicKeySha256 =
+  createHash(
+    "sha256"
+  )
+    .update(
+      admissionPublicKeyDer
+    )
+    .digest("hex");
+
+
+const admissionPrivateKeyPkcs8Base64 =
+  admissionPrivateKey
+    .export({
+      type:
+        "pkcs8",
+
+      format:
+        "der"
+    })
+    .toString(
+      "base64"
+    );
+
+
+const ADMISSION_SIGNER_ID =
+  "ADMISSION-SIGNER-A011";
+
+
+function signA011AdmissionPayload(
+  payloadBytes
+) {
+  return sign(
+    null,
+    payloadBytes,
+    admissionPrivateKey
+  );
+}
 
 
 const EVALUATOR_SHA =
@@ -235,6 +310,12 @@ function buildFixture({
       "consumptions.jsonl"
     );
 
+  const admissionTrustRegistryPath =
+    join(
+      dir,
+      "admission-trust.jsonl"
+    );
+
   const evtLogPath =
     join(
       dir,
@@ -257,6 +338,66 @@ function buildFixture({
     "",
     "utf8"
   );
+
+
+  const admissionKeyId =
+    `ADMISSION-KEY-A011-${suffix}`;
+
+
+  registerAdmissionSignerKey({
+    registryPath:
+      admissionTrustRegistryPath,
+
+    trust: {
+      schema_version:
+        "1.0",
+
+      event_id:
+        `ADMISSION-TRUST-EVENT-A011-${suffix}`,
+
+      event_type:
+        "TRUSTED",
+
+      signer_id:
+        ADMISSION_SIGNER_ID,
+
+      key_id:
+        admissionKeyId,
+
+      scope:
+        "ADMISSION_CONSUMPTION_SIGNING",
+
+      algorithm:
+        "ED25519",
+
+      public_key_spki_der_base64:
+        admissionPublicKeyDer
+          .toString(
+            "base64"
+          ),
+
+      public_key_sha256:
+        admissionPublicKeySha256,
+
+      valid_from:
+        iso(
+          -60 * 60 * 1000
+        ),
+
+      valid_until:
+        iso(
+          60 * 60 * 1000
+        )
+    },
+
+    recordedAt:
+      iso(
+        -60 * 60 * 1000
+      ),
+
+    recordedBy:
+      "IPR-A011-TRUST-ADMIN"
+  });
 
 
   const mandateId =
@@ -651,7 +792,13 @@ function buildFixture({
     runtimeRegistryPath,
     revocationRegistryPath,
     consumptionRegistryPath,
+    admissionTrustRegistryPath,
     evtLogPath,
+
+    admissionSignerId:
+      ADMISSION_SIGNER_ID,
+
+    admissionKeyId,
 
     mandateId,
     authorityId,
@@ -846,10 +993,22 @@ function callGate(
     consumptionRegistryPath:
       fixture.consumptionRegistryPath,
 
+    admissionTrustRegistryPath:
+      fixture.admissionTrustRegistryPath,
+
     consumptionId,
 
     consumedBy:
       "IPR-BANK-001",
+
+    admissionSignerId:
+      fixture.admissionSignerId,
+
+    admissionKeyId:
+      fixture.admissionKeyId,
+
+    signAdmissionPayload:
+      signA011AdmissionPayload,
 
     authority:
       fixture.authority,
@@ -1233,6 +1392,24 @@ try {
           fixture.authorization
             .runtime_binding
         ) ||
+      receipt
+        .admission_provenance_signed !==
+        true ||
+      receipt
+        .admission_signature_verified !==
+        true ||
+      receipt
+        .admission_signature_algorithm !==
+        "ED25519" ||
+      receipt
+        .admission_signer_id !==
+        fixture.admissionSignerId ||
+      receipt
+        .admission_key_id !==
+        fixture.admissionKeyId ||
+      receipt
+        .admission_key_control_proven !==
+        true ||
       receipt.single_use_consumed !==
         true ||
       receipt.execution_not_performed !==
@@ -1244,8 +1421,63 @@ try {
     }
 
 
+    const signedConsumption =
+      getAuthorizationConsumption({
+        registryPath:
+          fixture.consumptionRegistryPath,
+
+        authorizationId:
+          fixture.authorizationId
+      });
+
+
+    if (
+      !signedConsumption ||
+      signedConsumption.registry_version !==
+        "1.2" ||
+      signedConsumption.admission_signer_id !==
+        fixture.admissionSignerId ||
+      signedConsumption.admission_key_id !==
+        fixture.admissionKeyId ||
+      signedConsumption.admission_signature_algorithm !==
+        "ED25519"
+    ) {
+      fail(
+        "A011_FINAL_SIGNED_CONSUMPTION_INVALID"
+      );
+    }
+
+
+    const independentSignatureCheck =
+      verifyAdmissionConsumptionSignature({
+        record:
+          signedConsumption,
+
+        trustRegistryPath:
+          fixture.admissionTrustRegistryPath
+      });
+
+
+    if (
+      independentSignatureCheck.valid !==
+        true ||
+      independentSignatureCheck.signature_valid !==
+        true ||
+      independentSignatureCheck.key_control_proven !==
+        true
+    ) {
+      fail(
+        "A011_FINAL_SIGNED_PROVENANCE_VERIFY_INVALID"
+      );
+    }
+
+
     console.log(
       "A011_FINAL_GUARDED_VALID_CLAIM=PASS"
+    );
+
+    console.log(
+      "A011_FINAL_SIGNED_ADMISSION_PROVENANCE=PASS"
     );
 
 
@@ -1676,6 +1908,15 @@ try {
           consumptionRegistryPath:
             fixture.consumptionRegistryPath,
 
+          admissionTrustRegistryPath:
+            fixture.admissionTrustRegistryPath,
+
+          admissionSignerId:
+            fixture.admissionSignerId,
+
+          admissionKeyId:
+            fixture.admissionKeyId,
+
           authority:
             fixture.authority,
 
@@ -1710,6 +1951,11 @@ try {
   readFileSync
 } from "node:fs";
 
+import {
+  createPrivateKey,
+  sign
+} from "node:crypto";
+
 
 const {
   guardedConsumeAuthorization
@@ -1735,6 +1981,43 @@ const fixture =
   );
 
 
+const privateKeyBase64 =
+  process.env
+    .HBCE_A011_ADMISSION_PRIVATE_KEY_PKCS8_BASE64;
+
+
+if (!privateKeyBase64) {
+  throw new Error(
+    "A011_RACE_ADMISSION_PRIVATE_KEY_ENV_MISSING"
+  );
+}
+
+
+const admissionPrivateKey =
+  createPrivateKey({
+    key:
+      Buffer.from(
+        privateKeyBase64,
+        "base64"
+      ),
+
+    type:
+      "pkcs8",
+
+    format:
+      "der"
+  });
+
+
+const signAdmissionPayload =
+  (payloadBytes) =>
+    sign(
+      null,
+      payloadBytes,
+      admissionPrivateKey
+    );
+
+
 try {
   const receipt =
     guardedConsumeAuthorization({
@@ -1744,7 +2027,9 @@ try {
         \`CONSUMPTION-A011-FINAL-RACE-\${suffix}\`,
 
       consumedBy:
-        \`IPR-RACE-\${suffix}\`
+        \`IPR-RACE-\${suffix}\`,
+
+      signAdmissionPayload
     });
 
 
@@ -1762,23 +2047,37 @@ try {
     );
 
 
-    const [
-      raceA,
-      raceB
-    ] =
-      await Promise.all([
-        runWorker(
-          workerPath,
-          fixturePath,
-          "A"
-        ),
+    let raceA;
+    let raceB;
 
-        runWorker(
-          workerPath,
-          fixturePath,
-          "B"
-        )
-      ]);
+
+    process.env
+      .HBCE_A011_ADMISSION_PRIVATE_KEY_PKCS8_BASE64 =
+      admissionPrivateKeyPkcs8Base64;
+
+
+    try {
+      [
+        raceA,
+        raceB
+      ] =
+        await Promise.all([
+          runWorker(
+            workerPath,
+            fixturePath,
+            "A"
+          ),
+
+          runWorker(
+            workerPath,
+            fixturePath,
+            "B"
+          )
+        ]);
+    } finally {
+      delete process.env
+        .HBCE_A011_ADMISSION_PRIVATE_KEY_PKCS8_BASE64;
+    }
 
 
     if (

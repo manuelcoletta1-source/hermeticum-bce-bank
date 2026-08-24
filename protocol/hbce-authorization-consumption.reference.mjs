@@ -12,6 +12,20 @@ import {
 } from "node:crypto";
 
 
+import {
+  assertAdmissionSignerTrusted,
+  verifyAdmissionSignerTrustRegistry
+} from "./hbce-admission-signer-trust.reference.mjs";
+
+
+import {
+  buildAdmissionConsumptionSignedPayload,
+  encodeAdmissionConsumptionSignedPayload,
+  hashAdmissionConsumptionSignedPayload,
+  verifyAdmissionConsumptionSignature
+} from "./hbce-admission-signature.reference.mjs";
+
+
 const CONSUMPTION_ID_PATTERN =
   /^CONSUMPTION-[A-Z0-9][A-Z0-9._:-]{2,127}$/;
 
@@ -23,6 +37,18 @@ const EVT_ID_PATTERN =
 
 const SHA256_PATTERN =
   /^[a-f0-9]{64}$/;
+
+
+const V1_2_PROVENANCE_KEYS =
+  Object.freeze([
+    "admission_signer_id",
+    "admission_key_id",
+    "admission_public_key_sha256",
+    "admission_trust_record_sha256",
+    "admission_signed_payload_sha256",
+    "admission_signature_algorithm",
+    "admission_signature_base64"
+  ]);
 
 
 const ALLOWED_RECORD_KEYS =
@@ -38,6 +64,9 @@ const ALLOWED_RECORD_KEYS =
     "consumed_at",
     "consumed_by",
     "previous_record_sha256",
+
+    ...V1_2_PROVENANCE_KEYS,
+
     "record_sha256"
   ]);
 
@@ -141,6 +170,41 @@ function assertIsoDate(
     Number.isNaN(
       Date.parse(value)
     )
+  ) {
+    fail(code);
+  }
+}
+
+
+function assertEd25519SignatureBase64(
+  value,
+  code
+) {
+  assertString(
+    value,
+    code,
+    128
+  );
+
+  let signature;
+
+  try {
+    signature =
+      Buffer.from(
+        value,
+        "base64"
+      );
+  } catch {
+    fail(code);
+  }
+
+  if (
+    signature.length !==
+      64 ||
+    signature.toString(
+      "base64"
+    ) !==
+      value
   ) {
     fail(code);
   }
@@ -308,7 +372,9 @@ function parseRegistry(
         record.registry_version !==
           "1.0" &&
         record.registry_version !==
-          "1.1"
+          "1.1" &&
+        record.registry_version !==
+          "1.2"
       ) ||
       record.record_type !==
         "AUTHORIZATION_CONSUMED"
@@ -322,10 +388,60 @@ function parseRegistry(
       record.registry_version ===
         "1.1";
 
+    const isV12 =
+      record.registry_version ===
+        "1.2";
+
+
+    const hasAnyV12Provenance =
+      V1_2_PROVENANCE_KEYS.some(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(
+            record,
+            key
+          )
+      );
+
+
+    const hasAllV12Provenance =
+      V1_2_PROVENANCE_KEYS.every(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(
+            record,
+            key
+          )
+      );
+
+
+    if (
+      isV12 &&
+      !hasAllV12Provenance
+    ) {
+      fail(
+        `CONSUMPTION_REGISTRY_V1_2_PROVENANCE_REQUIRED:${index + 1}`
+      );
+    }
+
+
+    if (
+      !isV12 &&
+      hasAnyV12Provenance
+    ) {
+      fail(
+        `CONSUMPTION_REGISTRY_LEGACY_PROVENANCE_FORBIDDEN:${index + 1}`
+      );
+    }
+
+
     const expectedFieldCount =
-      isV11
+      isV12
         ? ALLOWED_RECORD_KEYS.size
-        : ALLOWED_RECORD_KEYS.size - 1;
+        : isV11
+          ? ALLOWED_RECORD_KEYS.size -
+            V1_2_PROVENANCE_KEYS.length
+          : ALLOWED_RECORD_KEYS.size -
+            V1_2_PROVENANCE_KEYS.length -
+            1;
 
     if (
       Object.keys(record).length !==
@@ -344,6 +460,7 @@ function parseRegistry(
 
     if (
       !isV11 &&
+      !isV12 &&
       hasAdmissionBinding
     ) {
       fail(
@@ -352,11 +469,14 @@ function parseRegistry(
     }
 
     if (
-      isV11 &&
+      (
+        isV11 ||
+        isV12
+      ) &&
       !hasAdmissionBinding
     ) {
       fail(
-        `CONSUMPTION_REGISTRY_V1_1_ADMISSION_FIELD_REQUIRED:${index + 1}`
+        `CONSUMPTION_REGISTRY_ADMISSION_FIELD_REQUIRED:${index + 1}`
       );
     }
 
@@ -406,10 +526,55 @@ function parseRegistry(
       `CONSUMPTION_REGISTRY_EVT_SHA256_INVALID:${index + 1}`
     );
 
-    if (isV11) {
+    if (
+      isV11 ||
+      isV12
+    ) {
       assertSha256(
         record.presented_runtime_binding_sha256,
         `CONSUMPTION_REGISTRY_PRESENTED_RUNTIME_SHA256_INVALID:${index + 1}`
+      );
+    }
+
+
+    if (isV12) {
+      assertString(
+        record.admission_signer_id,
+        `CONSUMPTION_REGISTRY_SIGNER_ID_INVALID:${index + 1}`
+      );
+
+      assertString(
+        record.admission_key_id,
+        `CONSUMPTION_REGISTRY_KEY_ID_INVALID:${index + 1}`
+      );
+
+      assertSha256(
+        record.admission_public_key_sha256,
+        `CONSUMPTION_REGISTRY_PUBLIC_KEY_SHA256_INVALID:${index + 1}`
+      );
+
+      assertSha256(
+        record.admission_trust_record_sha256,
+        `CONSUMPTION_REGISTRY_TRUST_RECORD_SHA256_INVALID:${index + 1}`
+      );
+
+      assertSha256(
+        record.admission_signed_payload_sha256,
+        `CONSUMPTION_REGISTRY_SIGNED_PAYLOAD_SHA256_INVALID:${index + 1}`
+      );
+
+      if (
+        record.admission_signature_algorithm !==
+          "ED25519"
+      ) {
+        fail(
+          `CONSUMPTION_REGISTRY_SIGNATURE_ALGORITHM_INVALID:${index + 1}`
+        );
+      }
+
+      assertEd25519SignatureBase64(
+        record.admission_signature_base64,
+        `CONSUMPTION_REGISTRY_SIGNATURE_INVALID:${index + 1}`
       );
     }
 
@@ -484,12 +649,15 @@ function parseRegistry(
       evaluation_evt_sha256:
         record.evaluation_evt_sha256,
 
-      ...(isV11
-        ? {
-            presented_runtime_binding_sha256:
-              record.presented_runtime_binding_sha256
-          }
-        : {}),
+      ...(
+        isV11 ||
+        isV12
+          ? {
+              presented_runtime_binding_sha256:
+                record.presented_runtime_binding_sha256
+            }
+          : {}
+      ),
 
       consumed_at:
         record.consumed_at,
@@ -498,8 +666,95 @@ function parseRegistry(
         record.consumed_by,
 
       previous_record_sha256:
-        record.previous_record_sha256
+        record.previous_record_sha256,
+
+      ...(isV12
+        ? {
+            admission_signer_id:
+              record.admission_signer_id,
+
+            admission_key_id:
+              record.admission_key_id,
+
+            admission_public_key_sha256:
+              record.admission_public_key_sha256,
+
+            admission_trust_record_sha256:
+              record.admission_trust_record_sha256,
+
+            admission_signed_payload_sha256:
+              record.admission_signed_payload_sha256,
+
+            admission_signature_algorithm:
+              record.admission_signature_algorithm,
+
+            admission_signature_base64:
+              record.admission_signature_base64
+          }
+        : {})
     };
+
+
+    if (isV12) {
+      const signedPayload =
+        buildAdmissionConsumptionSignedPayload({
+          consumption_id:
+            record.consumption_id,
+
+          authorization_id:
+            record.authorization_id,
+
+          authorization_sha256:
+            record.authorization_sha256,
+
+          evaluation_evt_id:
+            record.evaluation_evt_id,
+
+          evaluation_evt_sha256:
+            record.evaluation_evt_sha256,
+
+          presented_runtime_binding_sha256:
+            record.presented_runtime_binding_sha256,
+
+          consumed_at:
+            record.consumed_at,
+
+          consumed_by:
+            record.consumed_by,
+
+          previous_record_sha256:
+            record.previous_record_sha256,
+
+          admission_signer_id:
+            record.admission_signer_id,
+
+          admission_key_id:
+            record.admission_key_id,
+
+          admission_public_key_sha256:
+            record.admission_public_key_sha256,
+
+          admission_trust_record_sha256:
+            record.admission_trust_record_sha256
+        });
+
+
+      const signedPayloadSha256 =
+        hashAdmissionConsumptionSignedPayload(
+          signedPayload
+        );
+
+
+      if (
+        signedPayloadSha256 !==
+          record.admission_signed_payload_sha256
+      ) {
+        fail(
+          `CONSUMPTION_REGISTRY_SIGNED_PAYLOAD_HASH_MISMATCH:${index + 1}`
+        );
+      }
+    }
+
 
     const calculatedRecordHash =
       sha256Canonical(
@@ -617,7 +872,12 @@ export function consumeAuthorization({
   presentedRuntimeBindingSha256,
 
   consumedAt,
-  consumedBy
+  consumedBy,
+
+  admissionTrustRegistryPath,
+  admissionSignerId,
+  admissionKeyId,
+  signAdmissionPayload
 }) {
   assertString(
     registryPath,
@@ -671,6 +931,30 @@ export function consumeAuthorization({
     consumedBy,
     "CONSUMPTION_ACTOR_INVALID"
   );
+
+  assertString(
+    admissionTrustRegistryPath,
+    "CONSUMPTION_ADMISSION_TRUST_REGISTRY_PATH_REQUIRED"
+  );
+
+  assertString(
+    admissionSignerId,
+    "CONSUMPTION_ADMISSION_SIGNER_ID_REQUIRED"
+  );
+
+  assertString(
+    admissionKeyId,
+    "CONSUMPTION_ADMISSION_KEY_ID_REQUIRED"
+  );
+
+  if (
+    typeof signAdmissionPayload !==
+      "function"
+  ) {
+    fail(
+      "CONSUMPTION_ADMISSION_SIGNER_CALLBACK_REQUIRED"
+    );
+  }
 
   if (
     Date.parse(
@@ -771,9 +1055,222 @@ export function consumeAuthorization({
             records.length - 1
           ].record_sha256;
 
+
+    const trustSnapshotBefore =
+      verifyAdmissionSignerTrustRegistry({
+        registryPath:
+          admissionTrustRegistryPath
+      });
+
+
+    if (
+      trustSnapshotBefore.valid !==
+        true
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_TRUST_REGISTRY_INVALID"
+      );
+    }
+
+
+    const trustBefore =
+      assertAdmissionSignerTrusted({
+        registryPath:
+          admissionTrustRegistryPath,
+
+        signerId:
+          admissionSignerId,
+
+        keyId:
+          admissionKeyId,
+
+        asOf:
+          consumedAt
+      });
+
+
+    const signedPayload =
+      buildAdmissionConsumptionSignedPayload({
+        consumption_id:
+          consumptionId,
+
+        authorization_id:
+          immutableAuthorization
+            .authorization_id,
+
+        authorization_sha256:
+          authorizationSha256,
+
+        evaluation_evt_id:
+          evaluationEvtId,
+
+        evaluation_evt_sha256:
+          evaluationEvtSha256,
+
+        presented_runtime_binding_sha256:
+          presentedRuntimeBindingSha256,
+
+        consumed_at:
+          consumedAt,
+
+        consumed_by:
+          consumedBy,
+
+        previous_record_sha256:
+          previousRecordHash,
+
+        admission_signer_id:
+          admissionSignerId,
+
+        admission_key_id:
+          admissionKeyId,
+
+        admission_public_key_sha256:
+          trustBefore.public_key_sha256,
+
+        admission_trust_record_sha256:
+          trustBefore.trust_record_sha256
+      });
+
+
+    const signedPayloadBytes =
+      encodeAdmissionConsumptionSignedPayload(
+        signedPayload
+      );
+
+
+    let signatureResult;
+
+    try {
+      signatureResult =
+        signAdmissionPayload(
+          Buffer.from(
+            signedPayloadBytes
+          ),
+          {
+            algorithm:
+              "ED25519",
+
+            signer_id:
+              admissionSignerId,
+
+            key_id:
+              admissionKeyId,
+
+            public_key_sha256:
+              trustBefore.public_key_sha256,
+
+            trust_record_sha256:
+              trustBefore.trust_record_sha256,
+
+            consumed_at:
+              consumedAt
+          }
+        );
+    } catch {
+      fail(
+        "CONSUMPTION_ADMISSION_SIGNER_FAILED"
+      );
+    }
+
+
+    if (
+      signatureResult !==
+        null &&
+      typeof signatureResult ===
+        "object" &&
+      typeof signatureResult.then ===
+        "function"
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_ASYNC_SIGNER_UNSUPPORTED"
+      );
+    }
+
+
+    if (
+      !Buffer.isBuffer(
+        signatureResult
+      ) &&
+      !(
+        signatureResult instanceof
+          Uint8Array
+      )
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_SIGNATURE_RESULT_INVALID"
+      );
+    }
+
+
+    const signatureBytes =
+      Buffer.from(
+        signatureResult
+      );
+
+
+    if (
+      signatureBytes.length !==
+        64
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_SIGNATURE_RESULT_INVALID"
+      );
+    }
+
+
+    const trustSnapshotAfterSign =
+      verifyAdmissionSignerTrustRegistry({
+        registryPath:
+          admissionTrustRegistryPath
+      });
+
+
+    if (
+      trustSnapshotAfterSign.valid !==
+        true ||
+      trustSnapshotAfterSign.record_count !==
+        trustSnapshotBefore.record_count ||
+      trustSnapshotAfterSign.head_record_sha256 !==
+        trustSnapshotBefore.head_record_sha256
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_TRUST_CHANGED_DURING_SIGNING"
+      );
+    }
+
+
+    const trustAfterSign =
+      assertAdmissionSignerTrusted({
+        registryPath:
+          admissionTrustRegistryPath,
+
+        signerId:
+          admissionSignerId,
+
+        keyId:
+          admissionKeyId,
+
+        asOf:
+          consumedAt
+      });
+
+
+    if (
+      trustAfterSign.public_key_sha256 !==
+        trustBefore.public_key_sha256 ||
+      trustAfterSign.trust_record_sha256 !==
+        trustBefore.trust_record_sha256
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_TRUST_CHANGED_DURING_SIGNING"
+      );
+    }
+
+
     const recordHashBasis = {
       registry_version:
-        "1.1",
+        "1.2",
 
       record_type:
         "AUTHORIZATION_CONSUMED",
@@ -804,8 +1301,34 @@ export function consumeAuthorization({
         consumedBy,
 
       previous_record_sha256:
-        previousRecordHash
+        previousRecordHash,
+
+      admission_signer_id:
+        admissionSignerId,
+
+      admission_key_id:
+        admissionKeyId,
+
+      admission_public_key_sha256:
+        trustBefore.public_key_sha256,
+
+      admission_trust_record_sha256:
+        trustBefore.trust_record_sha256,
+
+      admission_signed_payload_sha256:
+        hashAdmissionConsumptionSignedPayload(
+          signedPayload
+        ),
+
+      admission_signature_algorithm:
+        "ED25519",
+
+      admission_signature_base64:
+        signatureBytes.toString(
+          "base64"
+        )
     };
+
 
     const record = {
       ...recordHashBasis,
@@ -815,6 +1338,48 @@ export function consumeAuthorization({
           recordHashBasis
         )
     };
+
+
+    const signatureVerification =
+      verifyAdmissionConsumptionSignature({
+        record,
+
+        trustRegistryPath:
+          admissionTrustRegistryPath
+      });
+
+
+    if (
+      signatureVerification.valid !==
+        true ||
+      signatureVerification.signature_valid !==
+        true
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_SIGNATURE_PREAPPEND_VERIFY_FAILED"
+      );
+    }
+
+
+    const trustSnapshotBeforeAppend =
+      verifyAdmissionSignerTrustRegistry({
+        registryPath:
+          admissionTrustRegistryPath
+      });
+
+
+    if (
+      trustSnapshotBeforeAppend.valid !==
+        true ||
+      trustSnapshotBeforeAppend.record_count !==
+        trustSnapshotBefore.record_count ||
+      trustSnapshotBeforeAppend.head_record_sha256 !==
+        trustSnapshotBefore.head_record_sha256
+    ) {
+      fail(
+        "CONSUMPTION_ADMISSION_TRUST_CHANGED_BEFORE_APPEND"
+      );
+    }
 
     appendFileSync(
       registryPath,
@@ -904,7 +1469,24 @@ export function verifyAuthorizationConsumptionRegistry({
         ? null
         : records[
             records.length - 1
-          ].record_sha256
+          ].record_sha256,
+
+    signed_record_count:
+      records.filter(
+        (record) =>
+          record.registry_version ===
+            "1.2"
+      ).length,
+
+    unsigned_historical_record_count:
+      records.filter(
+        (record) =>
+          record.registry_version !==
+            "1.2"
+      ).length,
+
+    cryptographic_provenance_verified:
+      false
   };
 }
 

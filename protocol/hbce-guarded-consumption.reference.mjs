@@ -19,6 +19,11 @@ import {
 } from "./hbce-authorization-consumption.reference.mjs";
 
 
+import {
+  verifyAdmissionConsumptionSignature
+} from "./hbce-admission-signature.reference.mjs";
+
+
 const AUTHORIZED_CHECKS =
   Object.freeze([
     "MANDATE_VALID",
@@ -143,6 +148,11 @@ export function guardedConsumeAuthorization({
   consumptionId,
   consumedBy,
 
+  admissionTrustRegistryPath,
+  admissionSignerId,
+  admissionKeyId,
+  signAdmissionPayload,
+
   authority,
   decisionEvidence,
   authorization,
@@ -191,6 +201,30 @@ export function guardedConsumeAuthorization({
     consumedBy,
     "GUARDED_CONSUMED_BY_REQUIRED"
   );
+
+  assertString(
+    admissionTrustRegistryPath,
+    "GUARDED_ADMISSION_TRUST_REGISTRY_PATH_REQUIRED"
+  );
+
+  assertString(
+    admissionSignerId,
+    "GUARDED_ADMISSION_SIGNER_ID_REQUIRED"
+  );
+
+  assertString(
+    admissionKeyId,
+    "GUARDED_ADMISSION_KEY_ID_REQUIRED"
+  );
+
+  if (
+    typeof signAdmissionPayload !==
+      "function"
+  ) {
+    fail(
+      "GUARDED_ADMISSION_SIGNER_CALLBACK_REQUIRED"
+    );
+  }
 
   assertObject(
     authority,
@@ -441,7 +475,12 @@ export function guardedConsumeAuthorization({
       consumedAt:
         claimAt,
 
-      consumedBy
+      consumedBy,
+
+      admissionTrustRegistryPath,
+      admissionSignerId,
+      admissionKeyId,
+      signAdmissionPayload
     });
 
 
@@ -516,10 +555,54 @@ export function guardedConsumeAuthorization({
     persisted.evaluation_evt_sha256 !==
       historical.evt_sha256 ||
     persisted.presented_runtime_binding_sha256 !==
-      presentedRuntimeBindingSha256
+      presentedRuntimeBindingSha256 ||
+    persisted.registry_version !==
+      "1.2" ||
+    persisted.admission_signer_id !==
+      admissionSignerId ||
+    persisted.admission_key_id !==
+      admissionKeyId ||
+    persisted.admission_signature_algorithm !==
+      "ED25519" ||
+    typeof persisted
+      .admission_public_key_sha256 !==
+      "string" ||
+    typeof persisted
+      .admission_trust_record_sha256 !==
+      "string" ||
+    typeof persisted
+      .admission_signed_payload_sha256 !==
+      "string" ||
+    typeof persisted
+      .admission_signature_base64 !==
+      "string"
   ) {
     fail(
       "GUARDED_CONSUMPTION_RECORD_MISMATCH"
+    );
+  }
+
+
+  const admissionSignatureVerification =
+    verifyAdmissionConsumptionSignature({
+      record:
+        persisted,
+
+      trustRegistryPath:
+        admissionTrustRegistryPath
+    });
+
+
+  if (
+    admissionSignatureVerification.valid !==
+      true ||
+    admissionSignatureVerification.signature_valid !==
+      true ||
+    admissionSignatureVerification.key_control_proven !==
+      true
+  ) {
+    fail(
+      "GUARDED_ADMISSION_SIGNATURE_POSTCHECK_FAILED"
     );
   }
 
@@ -548,6 +631,39 @@ export function guardedConsumeAuthorization({
 
     presented_runtime_binding_sha256:
       presentedRuntimeBindingSha256,
+
+    admission_provenance_signed:
+      true,
+
+    admission_signature_verified:
+      true,
+
+    admission_signature_algorithm:
+      "ED25519",
+
+    admission_signer_id:
+      persisted.admission_signer_id,
+
+    admission_key_id:
+      persisted.admission_key_id,
+
+    admission_public_key_sha256:
+      persisted.admission_public_key_sha256,
+
+    admission_trust_record_sha256:
+      persisted.admission_trust_record_sha256,
+
+    admission_signed_payload_sha256:
+      persisted.admission_signed_payload_sha256,
+
+    admission_key_control_proven:
+      true,
+
+    admission_human_legal_identity_proven:
+      false,
+
+    admission_legal_authority_created:
+      false,
 
     revocation_state_stable_across_claim:
       true,
