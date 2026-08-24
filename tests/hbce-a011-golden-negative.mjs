@@ -823,7 +823,9 @@ function materializeHistoricalAllow(
 
 function callGate(
   fixture,
-  consumptionId
+  consumptionId,
+  presentedRuntimeBinding =
+    fixture.authorization.runtime_binding
 ) {
   return guardedConsumeAuthorization({
     evtLogPath:
@@ -860,6 +862,8 @@ function callGate(
 
     request:
       fixture.request,
+
+    presentedRuntimeBinding,
 
     policyContext:
       fixture.policyContext,
@@ -1220,6 +1224,9 @@ try {
       receipt
         .current_authorization_rechecked !==
         true ||
+      receipt
+        .presented_runtime_binding_verified !==
+        true ||
       receipt.single_use_consumed !==
         true ||
       receipt.execution_not_performed !==
@@ -1268,6 +1275,122 @@ try {
 
     console.log(
       "A011_FINAL_SEQUENTIAL_SINGLE_RECORD=PASS"
+    );
+  }
+
+
+  /*
+   * =====================================================
+   * 8A. GUARDED BOUNDARY RUNTIME SUBSTITUTION
+   * =====================================================
+   */
+
+  {
+    const fixture =
+      buildFixture();
+
+
+    materializeHistoricalAllow(
+      fixture
+    );
+
+
+    expectError(
+      "A011_FINAL_GUARDED_RUNTIME_SUBSTITUTION_DENY",
+
+      () =>
+        callGate(
+          fixture,
+          "CONSUMPTION-A011-FINAL-RUNTIME-SUBSTITUTION",
+          {
+            ...fixture.authorization
+              .runtime_binding,
+
+            runtime_id:
+              "A28"
+          }
+        ),
+
+      "GUARDED_CURRENT_AUTHORIZATION_DENIED"
+    );
+
+
+    const state =
+      verifyAuthorizationConsumptionRegistry({
+        registryPath:
+          fixture.consumptionRegistryPath
+      });
+
+
+    if (
+      state.valid !==
+        true ||
+      state.record_count !==
+        0
+    ) {
+      fail(
+        "A011_FINAL_GUARDED_RUNTIME_SUBSTITUTION_CONSUMED"
+      );
+    }
+
+
+    console.log(
+      "A011_FINAL_GUARDED_RUNTIME_SUBSTITUTION_NOT_CONSUMED=PASS"
+    );
+  }
+
+
+  /*
+   * =====================================================
+   * 8B. PRESENTED RUNTIME BINDING IS REQUIRED
+   * =====================================================
+   */
+
+  {
+    const fixture =
+      buildFixture();
+
+
+    materializeHistoricalAllow(
+      fixture
+    );
+
+
+    expectError(
+      "A011_FINAL_GUARDED_RUNTIME_BINDING_REQUIRED",
+
+      () =>
+        callGate(
+          fixture,
+          "CONSUMPTION-A011-FINAL-RUNTIME-MISSING",
+          null
+        ),
+
+      "GUARDED_PRESENTED_RUNTIME_BINDING_INVALID"
+    );
+
+
+    const state =
+      verifyAuthorizationConsumptionRegistry({
+        registryPath:
+          fixture.consumptionRegistryPath
+      });
+
+
+    if (
+      state.valid !==
+        true ||
+      state.record_count !==
+        0
+    ) {
+      fail(
+        "A011_FINAL_MISSING_RUNTIME_BINDING_CONSUMED"
+      );
+    }
+
+
+    console.log(
+      "A011_FINAL_MISSING_RUNTIME_BINDING_NOT_CONSUMED=PASS"
     );
   }
 
@@ -1559,6 +1682,10 @@ try {
           request:
             fixture.request,
 
+          presentedRuntimeBinding:
+            fixture.authorization
+              .runtime_binding,
+
           policyContext:
             fixture.policyContext,
 
@@ -1784,6 +1911,18 @@ try {
 
   console.log(
     "RUNTIME_SUBSTITUTION=DENY"
+  );
+
+  console.log(
+    "GUARDED_RUNTIME_SUBSTITUTION=DENY"
+  );
+
+  console.log(
+    "GUARDED_RUNTIME_SUBSTITUTION_CONSUMPTION=NONE"
+  );
+
+  console.log(
+    "PRESENTED_RUNTIME_BINDING=REQUIRED"
   );
 
   console.log(

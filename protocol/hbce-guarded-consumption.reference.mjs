@@ -146,6 +146,7 @@ export function guardedConsumeAuthorization({
   decisionEvidence,
   authorization,
   request,
+  presentedRuntimeBinding,
   policyContext = {},
 
   expectedEvaluator
@@ -208,6 +209,11 @@ export function guardedConsumeAuthorization({
   assertObject(
     request,
     "GUARDED_REQUEST_INVALID"
+  );
+
+  assertObject(
+    presentedRuntimeBinding,
+    "GUARDED_PRESENTED_RUNTIME_BINDING_INVALID"
   );
 
   assertObject(
@@ -346,6 +352,10 @@ export function guardedConsumeAuthorization({
    * 5. CURRENT AUTHORIZATION RECHECK.
    *
    * Historical validity is not current validity.
+   *
+   * presentedRuntimeBinding is supplied by the
+   * execution-admission boundary. It is deliberately
+   * not derived from authorization.runtime_binding.
    */
 
   const currentResult =
@@ -359,8 +369,7 @@ export function guardedConsumeAuthorization({
       decisionEvidence,
       request,
 
-      presentedRuntimeBinding:
-        authorization.runtime_binding,
+      presentedRuntimeBinding,
 
       policyContext,
 
@@ -521,6 +530,9 @@ export function guardedConsumeAuthorization({
       true,
 
     current_authorization_rechecked:
+      true,
+
+    presented_runtime_binding_verified:
       true,
 
     revocation_state_stable_across_claim:
