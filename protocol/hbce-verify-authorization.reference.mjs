@@ -14,9 +14,12 @@ import {
 } from "./hbce-revocation.reference.mjs";
 
 import {
-  evaluateAuthorization,
   hashCanonicalArtifact
 } from "./hbce-authorization-evaluator.reference.mjs";
+
+import {
+  resolveAuthorizationEvaluator
+} from "./hbce-evaluator-dispatch.reference.mjs";
 
 import {
   listEvts,
@@ -819,25 +822,47 @@ export function verifyHistoricalAuthorization({
    * before ALLOW can occur.
    */
 
+  const resolvedEvaluator =
+    resolveAuthorizationEvaluator(
+      event.evaluator
+    );
+
+
+  if (
+    resolvedEvaluator
+      .module_sha256_verified !==
+      true ||
+    resolvedEvaluator
+      .evaluator_sha256 !==
+      event.evaluator
+        .evaluator_sha256
+  ) {
+    fail(
+      "A010_EVALUATOR_MODULE_BINDING_FAILED"
+    );
+  }
+
+
   const replay =
-    evaluateAuthorization({
-      mandateRegistryPath,
-      runtimeRegistryPath,
-      revocationRegistryPath,
+    resolvedEvaluator
+      .evaluateAuthorization({
+        mandateRegistryPath,
+        runtimeRegistryPath,
+        revocationRegistryPath,
 
-      authority,
-      authorization,
-      decisionEvidence,
-      request,
+        authority,
+        authorization,
+        decisionEvidence,
+        request,
 
-      presentedRuntimeBinding:
-        event.runtime_binding,
+        presentedRuntimeBinding:
+          event.runtime_binding,
 
-      policyContext,
+        policyContext,
 
-      now:
-        event.occurred_at
-    });
+        now:
+          event.occurred_at
+      });
 
 
   assertReplayMatch(
@@ -864,6 +889,9 @@ export function verifyHistoricalAuthorization({
       "ALLOW",
 
     historical_authorization_verified:
+      true,
+
+    exact_evaluator_module_verified:
       true,
 
     current_executability_not_evaluated:
@@ -941,6 +969,7 @@ export function verifyHistoricalAuthorization({
       "EVT_LOG_INTEGRITY",
       "EVT_1_2",
       "TRUSTED_EVALUATOR_BOUND",
+      "EXACT_EVALUATOR_MODULE_BOUND",
       "MANDATE_REGISTRY_INTEGRITY",
       "RUNTIME_REGISTRY_INTEGRITY",
       "REVOCATION_REGISTRY_INTEGRITY",
