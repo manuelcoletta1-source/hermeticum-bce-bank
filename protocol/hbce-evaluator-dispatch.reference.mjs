@@ -14,7 +14,7 @@ import {
 import {
   evaluateAuthorization as
     evaluateAuthorizationA008_3
-} from "./hbce-authorization-evaluator.A008.3.mjs";
+} from "./replay/A008.3/hbce-authorization-evaluator.A008.3.mjs";
 
 
 const SHA256_PATTERN =
@@ -34,9 +34,54 @@ const A008_3_DESCRIPTOR =
 
     module_url:
       new URL(
-        "./hbce-authorization-evaluator.A008.3.mjs",
+        "./replay/A008.3/hbce-authorization-evaluator.A008.3.mjs",
         import.meta.url
       ),
+
+    dependencies:
+      Object.freeze([
+        Object.freeze({
+          dependency_id:
+            "HBCE-MANDATE-REGISTRY",
+
+          module_url:
+            new URL(
+              "./replay/A008.3/hbce-mandate-registry.reference.mjs",
+              import.meta.url
+            ),
+
+          module_sha256:
+            "1bf91757b176ad960a3109ea3fbe14ae2e690247b9209658cb164d04c79990be"
+        }),
+
+        Object.freeze({
+          dependency_id:
+            "HBCE-RUNTIME-REGISTRY",
+
+          module_url:
+            new URL(
+              "./replay/A008.3/hbce-runtime-registry.reference.mjs",
+              import.meta.url
+            ),
+
+          module_sha256:
+            "ea1e3c28f83913db2cdbd09f29bbb130a923ff7e737a21755ecf101ffc631e2c"
+        }),
+
+        Object.freeze({
+          dependency_id:
+            "HBCE-REVOCATION-REGISTRY",
+
+          module_url:
+            new URL(
+              "./replay/A008.3/hbce-revocation.reference.mjs",
+              import.meta.url
+            ),
+
+          module_sha256:
+            "60256a0206e451283ffe16c03d7ffc6ac59535c58bf4f368bb6cc52bd7856942"
+        })
+      ]),
 
     evaluateAuthorization:
       evaluateAuthorizationA008_3
@@ -233,6 +278,42 @@ export function resolveAuthorizationEvaluator(
   }
 
 
+  const verifiedDependencies =
+    descriptor.dependencies.map(
+      (dependency) => {
+        const actualSha256 =
+          sha256File(
+            dependency.module_url
+          );
+
+
+        if (
+          actualSha256 !==
+          dependency.module_sha256
+        ) {
+          fail(
+            "EVALUATOR_DISPATCH_DEPENDENCY_SHA256_MISMATCH"
+          );
+        }
+
+
+        return {
+          dependency_id:
+            dependency.dependency_id,
+
+          module_sha256:
+            dependency.module_sha256,
+
+          actual_module_sha256:
+            actualSha256,
+
+          module_sha256_verified:
+            true
+        };
+      }
+    );
+
+
   return {
     evaluator_id:
       descriptor.evaluator_id,
@@ -248,6 +329,12 @@ export function resolveAuthorizationEvaluator(
 
     module_sha256_verified:
       true,
+
+    dependency_closure_sha256_verified:
+      true,
+
+    dependencies:
+      verifiedDependencies,
 
     evaluateAuthorization:
       descriptor.evaluateAuthorization

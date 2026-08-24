@@ -843,6 +843,22 @@ export function verifyHistoricalAuthorization({
   }
 
 
+  if (
+    resolvedEvaluator
+      .dependency_closure_sha256_verified !==
+      true ||
+    !Array.isArray(
+      resolvedEvaluator.dependencies
+    ) ||
+    resolvedEvaluator.dependencies.length !==
+      3
+  ) {
+    fail(
+      "A010_EVALUATOR_DEPENDENCY_BINDING_FAILED"
+    );
+  }
+
+
   const replay =
     resolvedEvaluator
       .evaluateAuthorization({
@@ -892,6 +908,9 @@ export function verifyHistoricalAuthorization({
       true,
 
     exact_evaluator_module_verified:
+      true,
+
+    evaluator_dependency_closure_verified:
       true,
 
     current_executability_not_evaluated:
@@ -970,6 +989,7 @@ export function verifyHistoricalAuthorization({
       "EVT_1_2",
       "TRUSTED_EVALUATOR_BOUND",
       "EXACT_EVALUATOR_MODULE_BOUND",
+      "EVALUATOR_HBCE_DEPENDENCY_CLOSURE_BOUND",
       "MANDATE_REGISTRY_INTEGRITY",
       "RUNTIME_REGISTRY_INTEGRITY",
       "REVOCATION_REGISTRY_INTEGRITY",
