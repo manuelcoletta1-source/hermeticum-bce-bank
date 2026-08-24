@@ -1,0 +1,579 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermeticum-bce.eu/schemas/hbce-execution-evidence.schema.json",
+  "title": "HBCE Bank Execution Evidence",
+  "description": "Canonical Bank Edition representation of an observed execution-stage evidence artifact. Guarded consumption does not prove execution. Execution attempted does not prove acceptance. Acceptance does not prove completion. Completion does not prove business success. A successful observed outcome does not automatically prove finality, settlement, legal conformity or irreversibility.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "evidence_type",
+    "execution_id",
+    "attempt_id",
+    "authorization",
+    "consumption",
+    "evaluation_evt",
+    "request_sha256",
+    "runtime_binding",
+    "execution_payload_sha256",
+    "idempotency",
+    "observation_evidence_sha256",
+    "occurred_at",
+    "recorded_at",
+    "time_source",
+    "evidence_source",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "evidence_id": {
+      "type": "string",
+      "pattern": "^EXECUTION-EVIDENCE-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "EXECUTION_ATTEMPTED",
+        "EXECUTION_ACCEPTED",
+        "EXECUTION_COMPLETED",
+        "OUTCOME_OBSERVED"
+      ]
+    },
+    "execution_id": {
+      "type": "string",
+      "pattern": "^EXECUTION-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^EXECUTION-ATTEMPT-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "authorization": {
+      "$ref": "#/$defs/authorization_reference"
+    },
+    "consumption": {
+      "$ref": "#/$defs/consumption_reference"
+    },
+    "evaluation_evt": {
+      "$ref": "#/$defs/evt_reference"
+    },
+    "request_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "runtime_binding": {
+      "$ref": "#/$defs/runtime_binding"
+    },
+    "execution_payload_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "idempotency": {
+      "$ref": "#/$defs/idempotency"
+    },
+    "previous_evidence": {
+      "$ref": "#/$defs/evidence_reference"
+    },
+    "observation_evidence_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "time_source": {
+      "$ref": "#/$defs/time_source"
+    },
+    "evidence_source": {
+      "$ref": "#/$defs/evidence_source"
+    },
+    "external_evidence": {
+      "$ref": "#/$defs/external_evidence"
+    },
+    "outcome": {
+      "$ref": "#/$defs/outcome"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evidence_type": {
+            "const": "EXECUTION_ATTEMPTED"
+          }
+        },
+        "required": [
+          "evidence_type"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "external_evidence"
+              ]
+            },
+            {
+              "required": [
+                "outcome"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_type": {
+            "const": "EXECUTION_ACCEPTED"
+          }
+        },
+        "required": [
+          "evidence_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "previous_evidence",
+          "external_evidence"
+        ],
+        "properties": {
+          "external_evidence": {
+            "properties": {
+              "evidence_kind": {
+                "const": "ACCEPTANCE"
+              }
+            }
+          },
+          "evidence_source": {
+            "properties": {
+              "verification_state": {
+                "const": "VERIFIED"
+              }
+            }
+          }
+        },
+        "not": {
+          "required": [
+            "outcome"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_type": {
+            "const": "EXECUTION_COMPLETED"
+          }
+        },
+        "required": [
+          "evidence_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "previous_evidence",
+          "external_evidence"
+        ],
+        "properties": {
+          "external_evidence": {
+            "properties": {
+              "evidence_kind": {
+                "const": "COMPLETION"
+              }
+            }
+          },
+          "evidence_source": {
+            "properties": {
+              "verification_state": {
+                "const": "VERIFIED"
+              }
+            }
+          }
+        },
+        "not": {
+          "required": [
+            "outcome"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_type": {
+            "const": "OUTCOME_OBSERVED"
+          }
+        },
+        "required": [
+          "evidence_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "previous_evidence",
+          "external_evidence",
+          "outcome"
+        ],
+        "properties": {
+          "external_evidence": {
+            "properties": {
+              "evidence_kind": {
+                "const": "OUTCOME"
+              }
+            }
+          },
+          "evidence_source": {
+            "properties": {
+              "verification_state": {
+                "const": "VERIFIED"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "authorization_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_id",
+        "authorization_sha256"
+      ],
+      "properties": {
+        "authorization_id": {
+          "type": "string",
+          "pattern": "^AUTHORIZATION-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+        },
+        "authorization_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "consumption_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consumption_id",
+        "consumption_record_sha256"
+      ],
+      "properties": {
+        "consumption_id": {
+          "type": "string",
+          "pattern": "^CONSUMPTION-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+        },
+        "consumption_record_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "evt_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evt_id",
+        "evt_sha256"
+      ],
+      "properties": {
+        "evt_id": {
+          "type": "string",
+          "pattern": "^EVT-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+        },
+        "evt_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "evidence_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "evidence_sha256"
+      ],
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "pattern": "^EXECUTION-EVIDENCE-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+        },
+        "evidence_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "runtime_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_id",
+        "runtime_type",
+        "runtime_version",
+        "runtime_digest_sha256"
+      ],
+      "properties": {
+        "runtime_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "runtime_type": {
+          "type": "string",
+          "enum": [
+            "AI_AGENT",
+            "AI_MODEL",
+            "DETERMINISTIC_SOFTWARE",
+            "MACHINE",
+            "HUMAN_OPERATED_SOFTWARE",
+            "EXTERNAL_SERVICE"
+          ]
+        },
+        "runtime_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runtime_digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key_sha256",
+        "scope",
+        "external_enforcement"
+      ],
+      "properties": {
+        "key_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "AUTHORIZATION",
+            "EXECUTION",
+            "EXECUTION_ATTEMPT"
+          ]
+        },
+        "external_enforcement": {
+          "type": "string",
+          "enum": [
+            "CONFIRMED",
+            "NOT_CONFIRMED",
+            "NOT_APPLICABLE"
+          ]
+        }
+      }
+    },
+    "time_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "trusted_external_time"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "LOCAL_SYSTEM_CLOCK",
+            "EXTERNAL_SYSTEM_CLOCK",
+            "TRUSTED_TIMESTAMP_SERVICE",
+            "MIXED"
+          ]
+        },
+        "trusted_external_time": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "LOCAL_SYSTEM_CLOCK"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "then": {
+            "properties": {
+              "trusted_external_time": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "TRUSTED_TIMESTAMP_SERVICE"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "then": {
+            "properties": {
+              "trusted_external_time": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "evidence_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_type",
+        "source_reference",
+        "verification_state"
+      ],
+      "properties": {
+        "source_type": {
+          "type": "string",
+          "enum": [
+            "HBCE_RUNTIME",
+            "EXECUTION_ADAPTER",
+            "EXTERNAL_SYSTEM",
+            "HUMAN_OPERATOR"
+          ]
+        },
+        "source_reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "verification_state": {
+          "type": "string",
+          "enum": [
+            "VERIFIED",
+            "UNVERIFIED"
+          ]
+        }
+      }
+    },
+    "external_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_kind",
+        "external_system_reference",
+        "external_operation_reference",
+        "evidence_sha256"
+      ],
+      "properties": {
+        "evidence_kind": {
+          "type": "string",
+          "enum": [
+            "ACCEPTANCE",
+            "COMPLETION",
+            "OUTCOME"
+          ]
+        },
+        "external_system_reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "external_operation_reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "evidence_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "external_observed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "outcome_code",
+        "finality"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "SUCCEEDED",
+            "FAILED",
+            "PARTIAL",
+            "REJECTED",
+            "UNKNOWN"
+          ]
+        },
+        "outcome_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$"
+        },
+        "finality": {
+          "type": "string",
+          "enum": [
+            "NOT_EVALUATED",
+            "PROVISIONAL",
+            "FINAL",
+            "REVERSED",
+            "UNKNOWN"
+          ]
+        },
+        "business_reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_request_included",
+        "raw_execution_payload_included",
+        "raw_external_response_included"
+      ],
+      "properties": {
+        "raw_request_included": {
+          "const": false
+        },
+        "raw_execution_payload_included": {
+          "const": false
+        },
+        "raw_external_response_included": {
+          "const": false
+        }
+      }
+    }
+  }
+}
