@@ -19,6 +19,21 @@ import {
 } from "./hbce-execution-evidence-registry.reference.mjs";
 
 
+import {
+  assertExecutionAdapterTrusted
+} from "./hbce-execution-adapter-trust.reference.mjs";
+
+
+import {
+  assertExecutionAdapterCapabilityAuthorized
+} from "./hbce-execution-adapter-capability.reference.mjs";
+
+
+import {
+  verifyExecutionAdapterInvocationProof
+} from "./hbce-execution-adapter-signature.reference.mjs";
+
+
 const EXECUTION_ID_PATTERN =
   /^EXECUTION-[A-Z0-9][A-Z0-9._:-]{2,127}$/;
 
@@ -1009,6 +1024,296 @@ function sanitizeAdapterMetadata(
 }
 
 
+function assertAdapterInvocationProof(
+  proof
+) {
+  if (
+    proof === null ||
+    typeof proof !==
+      "object" ||
+    Array.isArray(proof)
+  ) {
+    fail(
+      "EXECUTION_ADAPTER_SIGNED_AUTHORIZATION_PROOF_REQUIRED"
+    );
+  }
+}
+
+
+function buildExpectedAdapterInvocationContext({
+  attemptRecord,
+  adapterId,
+  externalSystemReference,
+  proof
+}) {
+  assertAdapterInvocationProof(
+    proof
+  );
+
+
+  return {
+    execution_id:
+      attemptRecord.evidence.execution_id,
+
+    attempt_id:
+      attemptRecord.evidence.attempt_id,
+
+    authorization_id:
+      attemptRecord
+        .evidence
+        .authorization
+        .authorization_id,
+
+    consumption_id:
+      attemptRecord
+        .evidence
+        .consumption
+        .consumption_id,
+
+    adapter_id:
+      adapterId,
+
+    adapter_key_id:
+      proof.adapter_key_id,
+
+    capability_grant_id:
+      proof.capability_grant_id,
+
+    capability:
+      proof.capability,
+
+    external_system_reference:
+      externalSystemReference,
+
+    execution_payload_sha256:
+      attemptRecord
+        .evidence
+        .execution_payload_sha256,
+
+    idempotency_key_sha256:
+      attemptRecord
+        .evidence
+        .idempotency
+        .key_sha256
+  };
+}
+
+
+function assertAdapterProofTemporalOrder({
+  proof,
+  attemptRecord
+}) {
+  assertIsoDate(
+    proof.signed_at,
+    "EXECUTION_ADAPTER_INVOCATION_SIGNED_AT_INVALID"
+  );
+
+
+  assertIsoDate(
+    attemptRecord.appended_at,
+    "EXECUTION_ADAPTER_ATTEMPT_APPENDED_AT_INVALID"
+  );
+
+
+  if (
+    Date.parse(
+      proof.signed_at
+    ) <
+    Date.parse(
+      attemptRecord.appended_at
+    )
+  ) {
+    fail(
+      "EXECUTION_ADAPTER_INVOCATION_PROOF_BEFORE_EXECUTION_ADMISSION"
+    );
+  }
+}
+
+
+function verifyHistoricalAdapterAuthorization({
+  proof,
+  expectedContext,
+  adapterTrustRegistryPath,
+  capabilityRegistryPath
+}) {
+  let verification;
+
+
+  try {
+    verification =
+      verifyExecutionAdapterInvocationProof({
+        proof,
+
+        adapterTrustRegistryPath,
+
+        capabilityRegistryPath,
+
+        expectedContext
+      });
+  } catch {
+    fail(
+      "EXECUTION_ADAPTER_SIGNED_AUTHORIZATION_VERIFY_FAILED"
+    );
+  }
+
+
+  if (
+    verification.valid !==
+      true ||
+    verification.signature_valid !==
+      true ||
+    verification.trusted_public_key_binding !==
+      true ||
+    verification.key_control_proven !==
+      true ||
+    verification
+      .capability_authorized_as_of_signed_at !==
+        true ||
+    verification
+      .exact_target_authorized_as_of_signed_at !==
+        true ||
+    verification.expected_context_bound !==
+      true
+  ) {
+    fail(
+      "EXECUTION_ADAPTER_SIGNED_AUTHORIZATION_VERIFY_FAILED"
+    );
+  }
+
+
+  return verification;
+}
+
+
+function assertCurrentAdapterAuthorization({
+  proof,
+  adapterId,
+  externalSystemReference,
+  adapterTrustRegistryPath,
+  capabilityRegistryPath,
+  checkedAt
+}) {
+  assertIsoDate(
+    checkedAt,
+    "EXECUTION_ADAPTER_CURRENT_AUTHORIZATION_TIME_INVALID"
+  );
+
+
+  if (
+    Date.parse(
+      proof.signed_at
+    ) >
+    Date.parse(
+      checkedAt
+    )
+  ) {
+    fail(
+      "EXECUTION_ADAPTER_INVOCATION_PROOF_FROM_FUTURE"
+    );
+  }
+
+
+  let trust;
+  let capability;
+
+
+  try {
+    trust =
+      assertExecutionAdapterTrusted({
+        registryPath:
+          adapterTrustRegistryPath,
+
+        adapterId,
+
+        keyId:
+          proof.adapter_key_id,
+
+        asOf:
+          checkedAt,
+
+        expectedPublicKeySha256:
+          proof.adapter_public_key_sha256
+      });
+
+
+    capability =
+      assertExecutionAdapterCapabilityAuthorized({
+        registryPath:
+          capabilityRegistryPath,
+
+        grantId:
+          proof.capability_grant_id,
+
+        adapterId,
+
+        capability:
+          proof.capability,
+
+        externalSystemReference,
+
+        asOf:
+          checkedAt
+      });
+  } catch {
+    fail(
+      "EXECUTION_ADAPTER_CURRENT_AUTHORIZATION_VERIFY_FAILED"
+    );
+  }
+
+
+  if (
+    trust.trusted !==
+      true ||
+    trust.public_key_sha256 !==
+      proof.adapter_public_key_sha256 ||
+    trust.trust_record_sha256 !==
+      proof.adapter_trust_record_sha256 ||
+    capability.authorized !==
+      true ||
+    capability.capability_authorized !==
+      true ||
+    capability.exact_target_authorized !==
+      true ||
+    capability.grant_record_sha256 !==
+      proof.capability_grant_record_sha256
+  ) {
+    fail(
+      "EXECUTION_ADAPTER_CURRENT_AUTHORIZATION_VERIFY_FAILED"
+    );
+  }
+
+
+  return {
+    checked_at:
+      checkedAt,
+
+    adapter_identity_trusted:
+      true,
+
+    adapter_key_control_proven:
+      true,
+
+    adapter_capability_authorized:
+      true,
+
+    external_system_authorization_proven:
+      true,
+
+    legal_identity_proven:
+      false,
+
+    legal_authority_created:
+      false,
+
+    remote_target_authenticity_proven:
+      false,
+
+    trusted_external_time:
+      false
+  };
+}
+
+
 function publicClaim(
   claim
 ) {
@@ -1033,6 +1338,10 @@ export async function invokeExecutionAdapterBoundary({
   consumptionRegistryPath,
   admissionTrustRegistryPath,
   invocationRegistryPath,
+  provenanceRegistryPath,
+
+  adapterTrustRegistryPath,
+  capabilityRegistryPath,
 
   executionId,
   attemptId,
@@ -1043,8 +1352,16 @@ export async function invokeExecutionAdapterBoundary({
   rawExecutionPayload,
   rawIdempotencyKey,
 
+  adapterInvocationProof,
+
   invokeAdapter
 }) {
+
+  assertString(
+    provenanceRegistryPath,
+    "EXECUTION_ADAPTER_AUTHORIZATION_PROVENANCE_REGISTRY_PATH_REQUIRED"
+  );
+
   assertString(
     executionRegistryPath,
     "EXECUTION_ADAPTER_EXECUTION_REGISTRY_PATH_REQUIRED"
@@ -1063,6 +1380,18 @@ export async function invokeExecutionAdapterBoundary({
   assertString(
     invocationRegistryPath,
     "EXECUTION_ADAPTER_INVOCATION_REGISTRY_PATH_REQUIRED"
+  );
+
+
+  assertString(
+    adapterTrustRegistryPath,
+    "EXECUTION_ADAPTER_ADAPTER_TRUST_REGISTRY_PATH_REQUIRED"
+  );
+
+
+  assertString(
+    capabilityRegistryPath,
+    "EXECUTION_ADAPTER_CAPABILITY_REGISTRY_PATH_REQUIRED"
   );
 
 
@@ -1257,6 +1586,70 @@ export async function invokeExecutionAdapterBoundary({
   }
 
 
+  assertAdapterInvocationProof(
+    adapterInvocationProof
+  );
+
+
+  const immutableAdapterInvocationProof =
+    deepFreeze(
+      clone(
+        adapterInvocationProof
+      )
+    );
+
+
+  assertAdapterProofTemporalOrder({
+    proof:
+      immutableAdapterInvocationProof,
+
+    attemptRecord
+  });
+
+
+  const expectedAdapterInvocationContext =
+    buildExpectedAdapterInvocationContext({
+      attemptRecord,
+      adapterId,
+      externalSystemReference,
+
+      proof:
+        immutableAdapterInvocationProof
+    });
+
+
+  const historicalAdapterAuthorization =
+    verifyHistoricalAdapterAuthorization({
+      proof:
+        immutableAdapterInvocationProof,
+
+      expectedContext:
+        expectedAdapterInvocationContext,
+
+      adapterTrustRegistryPath,
+      capabilityRegistryPath
+    });
+
+
+  const authorizationAdmissionCheckedAt =
+    new Date()
+      .toISOString();
+
+
+  assertCurrentAdapterAuthorization({
+    proof:
+      immutableAdapterInvocationProof,
+
+    adapterId,
+    externalSystemReference,
+    adapterTrustRegistryPath,
+    capabilityRegistryPath,
+
+    checkedAt:
+      authorizationAdmissionCheckedAt
+  });
+
+
   /*
    * The durable claim is intentionally written BEFORE
    * adapter invocation.
@@ -1354,10 +1747,233 @@ export async function invokeExecutionAdapterBoundary({
   });
 
 
+  const callbackAuthorizationCheckedAt =
+    new Date()
+      .toISOString();
+
+
+  const currentAdapterAuthorization =
+    assertCurrentAdapterAuthorization({
+      proof:
+        immutableAdapterInvocationProof,
+
+      adapterId,
+      externalSystemReference,
+      adapterTrustRegistryPath,
+      capabilityRegistryPath,
+
+      checkedAt:
+        callbackAuthorizationCheckedAt
+    });
+
+
+  let adapterAuthorizationProvenance;
+
+  let adapterAuthorizationProvenanceVerification;
+
+  let persistedAdapterAuthorizationProvenance;
+
+
+  try {
+    const provenanceModule =
+      await import(
+        "./hbce-execution-adapter-authorization-provenance.reference.mjs"
+      );
+
+
+    adapterAuthorizationProvenance =
+      provenanceModule
+        .appendExecutionAdapterAuthorizationProvenance({
+          registryPath:
+            provenanceRegistryPath,
+
+          invocationRegistryPath,
+
+          provenance: {
+            invocation_id:
+              claim.invocation_id,
+
+            invocation_record_sha256:
+              claim.record_sha256,
+
+            execution_id:
+              attemptRecord
+                .evidence
+                .execution_id,
+
+            attempt_id:
+              attemptRecord
+                .evidence
+                .attempt_id,
+
+            authorization_id:
+              attemptRecord
+                .evidence
+                .authorization
+                .authorization_id,
+
+            consumption_id:
+              attemptRecord
+                .evidence
+                .consumption
+                .consumption_id,
+
+            adapter_id:
+              adapterId,
+
+            adapter_key_id:
+              immutableAdapterInvocationProof
+                .adapter_key_id,
+
+            capability_grant_id:
+              immutableAdapterInvocationProof
+                .capability_grant_id,
+
+            capability:
+              immutableAdapterInvocationProof
+                .capability,
+
+            external_system_reference:
+              externalSystemReference,
+
+            execution_payload_sha256:
+              payloadSha256,
+
+            idempotency_key_sha256:
+              idempotencyKeySha256,
+
+            adapter_signed_at:
+              immutableAdapterInvocationProof
+                .signed_at,
+
+            adapter_signed_payload_sha256:
+              immutableAdapterInvocationProof
+                .signed_payload_sha256,
+
+            adapter_signature_algorithm:
+              immutableAdapterInvocationProof
+                .signature_algorithm,
+
+            adapter_signature_base64:
+              immutableAdapterInvocationProof
+                .signature_base64,
+
+            adapter_public_key_sha256:
+              immutableAdapterInvocationProof
+                .adapter_public_key_sha256,
+
+            adapter_trust_record_sha256:
+              immutableAdapterInvocationProof
+                .adapter_trust_record_sha256,
+
+            capability_grant_record_sha256:
+              immutableAdapterInvocationProof
+                .capability_grant_record_sha256,
+
+            authorization_checked_at:
+              currentAdapterAuthorization
+                .checked_at,
+
+            time_source:
+              "LOCAL_SYSTEM_CLOCK"
+          }
+        });
+
+
+    persistedAdapterAuthorizationProvenance =
+      provenanceModule
+        .getExecutionAdapterAuthorizationProvenance({
+          registryPath:
+            provenanceRegistryPath,
+
+          invocationId:
+            claim.invocation_id
+        });
+
+
+    adapterAuthorizationProvenanceVerification =
+      provenanceModule
+        .verifyExecutionAdapterAuthorizationProvenanceRegistry({
+          registryPath:
+            provenanceRegistryPath,
+
+          invocationRegistryPath,
+
+          adapterTrustRegistryPath,
+
+          capabilityRegistryPath
+        });
+
+  } catch {
+    fail(
+      "EXECUTION_ADAPTER_AUTHORIZATION_PROVENANCE_EMISSION_VERIFY_FAILED"
+    );
+  }
+
+
+  if (
+    !adapterAuthorizationProvenance ||
+    !persistedAdapterAuthorizationProvenance ||
+
+    typeof adapterAuthorizationProvenance
+      .record_sha256 !==
+        "string" ||
+
+    persistedAdapterAuthorizationProvenance
+      .record_sha256 !==
+        adapterAuthorizationProvenance
+          .record_sha256 ||
+
+    persistedAdapterAuthorizationProvenance
+      .invocation_id !==
+        claim.invocation_id ||
+
+    persistedAdapterAuthorizationProvenance
+      .invocation_record_sha256 !==
+        claim.record_sha256 ||
+
+    adapterAuthorizationProvenanceVerification
+      .valid !==
+        true ||
+
+    adapterAuthorizationProvenanceVerification
+      .durable_authorization_provenance_recorded !==
+        true ||
+
+    adapterAuthorizationProvenanceVerification
+      .invocation_claim_binding_verified !==
+        true ||
+
+    adapterAuthorizationProvenanceVerification
+      .adapter_signature_cryptographically_verified !==
+        true ||
+
+    adapterAuthorizationProvenanceVerification
+      .historical_adapter_trust_verified !==
+        true ||
+
+    adapterAuthorizationProvenanceVerification
+      .historical_capability_authorization_verified !==
+        true ||
+
+    adapterAuthorizationProvenanceVerification
+      .historical_exact_target_authorization_verified !==
+        true ||
+
+    adapterAuthorizationProvenanceVerification
+      .authorization_state_as_of_recorded_check_verified !==
+        true
+  ) {
+    fail(
+      "EXECUTION_ADAPTER_AUTHORIZATION_PROVENANCE_EMISSION_VERIFY_FAILED"
+    );
+  }
+
+
   const envelope =
     deepFreeze({
       boundary_version:
-        "A019.1",
+        "A020.1",
 
       invocation_id:
         claim.invocation_id,
@@ -1370,6 +1986,56 @@ export async function invokeExecutionAdapterBoundary({
 
       cryptographic_execution_admission_reverified:
         true,
+
+      adapter_signed_authorization_verified:
+        true,
+
+      adapter_identity_trusted:
+        true,
+
+      adapter_key_control_proven:
+        true,
+
+      adapter_capability_authorized:
+        true,
+
+      external_system_authorization_proven:
+        true,
+
+      adapter_key_id:
+        immutableAdapterInvocationProof
+          .adapter_key_id,
+
+      capability_grant_id:
+        immutableAdapterInvocationProof
+          .capability_grant_id,
+
+      adapter_signed_payload_sha256:
+        historicalAdapterAuthorization
+          .signed_payload_sha256,
+
+      adapter_authorization_checked_at:
+        currentAdapterAuthorization
+          .checked_at,
+
+      adapter_authorization_time_source:
+        "LOCAL_SYSTEM_CLOCK",
+
+      adapter_authorization_provenance_verified:
+        true,
+
+      adapter_authorization_provenance_record_sha256:
+        adapterAuthorizationProvenance
+          .record_sha256,
+
+      legal_identity_proven:
+        false,
+
+      legal_authority_created:
+        false,
+
+      remote_target_authenticity_proven:
+        false,
 
       execution_id:
         executionId,
@@ -1436,7 +2102,7 @@ export async function invokeExecutionAdapterBoundary({
   } catch {
     return {
       boundary_version:
-        "A019.1",
+        "A020.1",
 
       invoked:
         true,
@@ -1459,9 +2125,55 @@ export async function invokeExecutionAdapterBoundary({
         {},
 
       adapter_identity_trusted:
-        false,
+
+        true,
+
+
+      adapter_key_control_proven:
+
+        true,
 
       adapter_capability_authorized:
+
+        true,
+
+
+      external_system_authorization_proven:
+
+        true,
+
+
+      adapter_signed_authorization_verified:
+
+        true,
+
+
+      current_callback_authorization_rechecked:
+
+        true,
+
+      adapter_authorization_provenance_verified:
+
+        true,
+
+      adapter_authorization_provenance_record_sha256:
+        adapterAuthorizationProvenance
+          .record_sha256,
+
+
+
+      legal_identity_proven:
+
+        false,
+
+
+      legal_authority_created:
+
+        false,
+
+
+      remote_target_authenticity_verified:
+
         false,
 
       external_response_authenticity_verified:
@@ -1484,7 +2196,7 @@ export async function invokeExecutionAdapterBoundary({
 
   return {
     boundary_version:
-      "A019.1",
+      "A020.1",
 
     invoked:
       true,
@@ -1509,9 +2221,55 @@ export async function invokeExecutionAdapterBoundary({
       ),
 
     adapter_identity_trusted:
-      false,
+
+      true,
+
+
+    adapter_key_control_proven:
+
+      true,
 
     adapter_capability_authorized:
+
+      true,
+
+
+    external_system_authorization_proven:
+
+      true,
+
+
+    adapter_signed_authorization_verified:
+
+      true,
+
+
+    current_callback_authorization_rechecked:
+
+      true,
+
+      adapter_authorization_provenance_verified:
+
+        true,
+
+      adapter_authorization_provenance_record_sha256:
+        adapterAuthorizationProvenance
+          .record_sha256,
+
+
+
+    legal_identity_proven:
+
+      false,
+
+
+    legal_authority_created:
+
+      false,
+
+
+    remote_target_authenticity_verified:
+
       false,
 
     external_response_authenticity_verified:

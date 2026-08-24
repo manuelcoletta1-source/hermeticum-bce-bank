@@ -5,6 +5,7 @@ import {
 } from "node:crypto";
 
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -24,6 +25,23 @@ import {
   registerAdmissionSignerKey
 } from "../protocol/hbce-admission-signer-trust.reference.mjs";
 
+
+import {
+  registerExecutionAdapterKey,
+  revokeExecutionAdapterKey
+} from "../protocol/hbce-execution-adapter-trust.reference.mjs";
+
+
+import {
+  grantExecutionAdapterCapability,
+  revokeExecutionAdapterCapability
+} from "../protocol/hbce-execution-adapter-capability.reference.mjs";
+
+
+import {
+  createExecutionAdapterInvocationProof
+} from "../protocol/hbce-execution-adapter-signature.reference.mjs";
+
 import {
   consumeAuthorization
 } from "../protocol/hbce-authorization-consumption.reference.mjs";
@@ -39,6 +57,12 @@ import {
   listExecutionAdapterInvocations,
   verifyExecutionAdapterInvocationRegistry
 } from "../protocol/hbce-execution-adapter-boundary.reference.mjs";
+
+
+import {
+  verifyExecutionAdapterAuthorizationProvenanceRegistry
+} from "../protocol/hbce-execution-adapter-authorization-provenance.reference.mjs";
+
 
 
 const root =
@@ -219,6 +243,176 @@ registerAdmissionSignerKey({
 
   recordedBy:
     "IPR-A019-TRUST-ADMIN"
+});
+
+
+const {
+  publicKey:
+    adapterPublicKey,
+
+  privateKey:
+    adapterPrivateKey
+} =
+  generateKeyPairSync(
+    "ed25519"
+  );
+
+
+const adapterPublicDer =
+  adapterPublicKey.export({
+    type:
+      "spki",
+
+    format:
+      "der"
+  });
+
+
+const adapterPublicSha =
+  createHash(
+    "sha256"
+  )
+    .update(
+      adapterPublicDer
+    )
+    .digest("hex");
+
+
+const adapterTrustPath =
+  join(
+    root,
+    "adapter-trust.jsonl"
+  );
+
+
+const adapterCapabilityPath =
+  join(
+    root,
+    "adapter-capability.jsonl"
+  );
+
+
+function registerAdapterTrust({
+  registryPath,
+  eventId,
+  validUntil =
+    "2027-01-01T00:00:00Z",
+  recordedAt =
+    "2026-08-24T09:00:00Z"
+}) {
+  return registerExecutionAdapterKey({
+    registryPath,
+
+    trust: {
+      schema_version:
+        "1.0",
+
+      event_id:
+        eventId,
+
+      event_type:
+        "TRUSTED",
+
+      adapter_id:
+        "ADAPTER-A019-REFERENCE",
+
+      key_id:
+        "ADAPTER-KEY-A019-REFERENCE",
+
+      scope:
+        "EXECUTION_ADAPTER_INVOCATION_SIGNING",
+
+      algorithm:
+        "ED25519",
+
+      public_key_spki_der_base64:
+        adapterPublicDer.toString(
+          "base64"
+        ),
+
+      public_key_sha256:
+        adapterPublicSha,
+
+      valid_from:
+        "2026-08-24T09:00:00Z",
+
+      valid_until:
+        validUntil
+    },
+
+    recordedAt,
+
+    recordedBy:
+      "IPR-A020D-TRUST-ADMIN"
+  });
+}
+
+
+function grantAdapterCapability({
+  registryPath,
+  eventId,
+  grantId =
+    "ADAPTER-CAPABILITY-GRANT-A019-REFERENCE",
+  validUntil =
+    "2027-01-01T00:00:00Z",
+  recordedAt =
+    "2026-08-24T09:00:00Z"
+}) {
+  return grantExecutionAdapterCapability({
+    registryPath,
+
+    grant: {
+      schema_version:
+        "1.0",
+
+      event_id:
+        eventId,
+
+      event_type:
+        "GRANTED",
+
+      grant_id:
+        grantId,
+
+      adapter_id:
+        "ADAPTER-A019-REFERENCE",
+
+      capability:
+        "INVOKE_EXTERNAL_SYSTEM",
+
+      external_system_reference:
+        "BANK-SANDBOX-A019",
+
+      valid_from:
+        "2026-08-24T09:00:00Z",
+
+      valid_until:
+        validUntil
+    },
+
+    recordedAt,
+
+    recordedBy:
+      "IPR-A020D-CAPABILITY-ADMIN"
+  });
+}
+
+
+registerAdapterTrust({
+  registryPath:
+    adapterTrustPath,
+
+  eventId:
+    "ADAPTER-TRUST-EVENT-A019-REFERENCE"
+});
+
+
+grantAdapterCapability({
+  registryPath:
+    adapterCapabilityPath,
+
+  eventId:
+    "ADAPTER-CAPABILITY-EVENT-A019-REFERENCE"
 });
 
 
@@ -472,11 +666,140 @@ function createAdmittedAttempt({
     consumptionRegistryPath,
     executionRegistryPath,
     invocationRegistryPath,
+
+    provenanceRegistryPath:
+      join(
+        root,
+        `adapter-authorization-provenance-${suffix}.jsonl`
+      ),
+
     executionId:
       attempt.execution_id,
     attemptId:
       attempt.attempt_id
   };
+}
+
+
+function adapterProofForFixture(
+  fixture,
+  {
+    trustRegistryPath =
+      adapterTrustPath,
+
+    capabilityRegistryPath =
+      adapterCapabilityPath,
+
+    signingKey =
+      adapterPrivateKey,
+
+    signedAt =
+      "2026-08-24T10:06:30Z",
+
+    adapterId =
+      "ADAPTER-A019-REFERENCE",
+
+    adapterKeyId =
+      "ADAPTER-KEY-A019-REFERENCE",
+
+    capabilityGrantId =
+      "ADAPTER-CAPABILITY-GRANT-A019-REFERENCE",
+
+    externalSystemReference =
+      "BANK-SANDBOX-A019"
+  } = {}
+) {
+  const executionRecords =
+    listExecutionEvidenceForExecution({
+      registryPath:
+        fixture.executionRegistryPath,
+
+      executionId:
+        fixture.executionId
+    });
+
+
+  const attempts =
+    executionRecords.filter(
+      (record) =>
+        record.evidence
+          .evidence_type ===
+            "EXECUTION_ATTEMPTED" &&
+        record.evidence
+          .attempt_id ===
+            fixture.attemptId
+    );
+
+
+  if (
+    attempts.length !==
+      1
+  ) {
+    fail(
+      `A020D_PROOF_ATTEMPT_COUNT_INVALID:${attempts.length}`
+    );
+  }
+
+
+  const attempt =
+    attempts[0]
+      .evidence;
+
+
+  return createExecutionAdapterInvocationProof({
+    adapterTrustRegistryPath:
+      trustRegistryPath,
+
+    capabilityRegistryPath,
+
+    context: {
+      execution_id:
+        attempt.execution_id,
+
+      attempt_id:
+        attempt.attempt_id,
+
+      authorization_id:
+        attempt.authorization
+          .authorization_id,
+
+      consumption_id:
+        attempt.consumption
+          .consumption_id,
+
+      adapter_id:
+        adapterId,
+
+      adapter_key_id:
+        adapterKeyId,
+
+      capability_grant_id:
+        capabilityGrantId,
+
+      capability:
+        "INVOKE_EXTERNAL_SYSTEM",
+
+      external_system_reference:
+        externalSystemReference,
+
+      execution_payload_sha256:
+        attempt.execution_payload_sha256,
+
+      idempotency_key_sha256:
+        attempt.idempotency
+          .key_sha256
+    },
+
+    signedAt,
+
+    signInvocationPayload:
+      (payloadBytes) =>
+        sign(
+          null,
+          payloadBytes,
+          signingKey
+        )
+  });
 }
 
 
@@ -497,6 +820,15 @@ function boundaryArgs(
     invocationRegistryPath:
       fixture.invocationRegistryPath,
 
+    provenanceRegistryPath:
+      fixture.provenanceRegistryPath,
+
+    adapterTrustRegistryPath:
+      adapterTrustPath,
+
+    capabilityRegistryPath:
+      adapterCapabilityPath,
+
     executionId:
       fixture.executionId,
 
@@ -514,6 +846,11 @@ function boundaryArgs(
 
     rawIdempotencyKey:
       fixture.idempotencyKey,
+
+    adapterInvocationProof:
+      adapterProofForFixture(
+        fixture
+      ),
 
     invokeAdapter
   };
@@ -588,12 +925,112 @@ try {
                 true ||
             envelope
               .cryptographic_execution_admission_reverified !==
-                true
+                true ||
+            envelope
+              .adapter_signed_authorization_verified !==
+                true ||
+            envelope
+              .adapter_identity_trusted !==
+                true ||
+            envelope
+              .adapter_key_control_proven !==
+                true ||
+            envelope
+              .adapter_capability_authorized !==
+                true ||
+            envelope
+              .external_system_authorization_proven !==
+                true ||
+            envelope
+              .adapter_authorization_time_source !==
+                "LOCAL_SYSTEM_CLOCK" ||
+            envelope
+              .legal_identity_proven !==
+                false ||
+            envelope
+              .legal_authority_created !==
+                false ||
+            envelope
+              .remote_target_authenticity_proven !==
+                false
           ) {
             fail(
               "A019_INVOCATION_PROVENANCE_NOT_REVERIFIED"
             );
           }
+
+
+          console.log(
+            "A020D_CALLBACK_AUTHORIZATION_ENVELOPE=PASS"
+          );
+
+
+          if (
+            envelope
+              .adapter_authorization_provenance_verified !==
+                true ||
+            typeof envelope
+              .adapter_authorization_provenance_record_sha256 !==
+                "string" ||
+            envelope
+              .adapter_authorization_provenance_record_sha256
+              .length !==
+                64
+          ) {
+            fail(
+              "A020E_C_CALLBACK_PROVENANCE_ENVELOPE_INVALID"
+            );
+          }
+
+
+          const liveProvenanceVerification =
+            verifyExecutionAdapterAuthorizationProvenanceRegistry({
+              registryPath:
+                valid.provenanceRegistryPath,
+
+              invocationRegistryPath:
+                valid.invocationRegistryPath,
+
+              adapterTrustRegistryPath:
+                adapterTrustPath,
+
+              capabilityRegistryPath:
+                adapterCapabilityPath
+            });
+
+
+          if (
+            liveProvenanceVerification
+              .valid !==
+                true ||
+            liveProvenanceVerification
+              .record_count !==
+                1 ||
+            liveProvenanceVerification
+              .adapter_signature_cryptographically_verified !==
+                true ||
+            liveProvenanceVerification
+              .historical_adapter_trust_verified !==
+                true ||
+            liveProvenanceVerification
+              .historical_capability_authorization_verified !==
+                true ||
+            liveProvenanceVerification
+              .historical_exact_target_authorization_verified !==
+                true ||
+            liveProvenanceVerification
+              .authorization_state_as_of_recorded_check_verified !==
+                true
+          ) {
+            fail(
+              "A020E_C_CALLBACK_PROVENANCE_NOT_VERIFIED"
+            );
+          }
+
+
+          console.log(
+            "A020E_C_LIVE_PROVENANCE_BEFORE_CALLBACK=PASS"
+          );
 
 
           return {
@@ -623,6 +1060,24 @@ try {
       true ||
     validResult.external_state !==
       "UNVERIFIED" ||
+    validResult.adapter_identity_trusted !==
+      true ||
+    validResult.adapter_key_control_proven !==
+      true ||
+    validResult.adapter_capability_authorized !==
+      true ||
+    validResult.external_system_authorization_proven !==
+      true ||
+    validResult.adapter_signed_authorization_verified !==
+      true ||
+    validResult.current_callback_authorization_rechecked !==
+      true ||
+    validResult.legal_identity_proven !==
+      false ||
+    validResult.legal_authority_created !==
+      false ||
+    validResult.remote_target_authenticity_verified !==
+      false ||
     validResult.external_acceptance_proven !==
       false ||
     validResult.execution_completion_proven !==
@@ -1238,7 +1693,19 @@ try {
     throwResult.external_state !==
       "UNKNOWN" ||
     throwResult.error_code !==
-      "EXECUTION_ADAPTER_CALLBACK_FAILED"
+      "EXECUTION_ADAPTER_CALLBACK_FAILED" ||
+    throwResult.adapter_identity_trusted !==
+      true ||
+    throwResult.adapter_key_control_proven !==
+      true ||
+    throwResult.adapter_capability_authorized !==
+      true ||
+    throwResult.external_system_authorization_proven !==
+      true ||
+    throwResult.adapter_signed_authorization_verified !==
+      true ||
+    throwResult.current_callback_authorization_rechecked !==
+      true
   ) {
     fail(
       "A019_CALLBACK_FAILURE_SEMANTICS_INVALID"
@@ -1419,6 +1886,761 @@ try {
 
   /*
    * ===================================================
+   * 9. MISSING SIGNED PROOF
+   * ===================================================
+   */
+
+  const missingProofFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020D-MISSING-PROOF",
+
+      payload:
+        "{\"missing_proof\":true}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020D-MISSING-PROOF"
+    });
+
+
+  let missingProofCalls =
+    0;
+
+
+  await expectReject(
+    "A020D_MISSING_SIGNED_PROOF_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          missingProofFixture,
+
+          async () => {
+            missingProofCalls += 1;
+            return {};
+          }
+        ),
+
+        adapterInvocationProof:
+          null
+      }),
+
+    "EXECUTION_ADAPTER_SIGNED_AUTHORIZATION_PROOF_REQUIRED"
+  );
+
+
+  if (
+    missingProofCalls !==
+      0 ||
+    existsSync(
+      missingProofFixture
+        .invocationRegistryPath
+    )
+  ) {
+    fail(
+      "A020D_MISSING_PROOF_REACHED_CLAIM_OR_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020D_MISSING_SIGNED_PROOF_CALLBACK_ZERO=PASS"
+  );
+
+
+  /*
+   * ===================================================
+   * 10. PROOF CREATED BEFORE EXECUTION ADMISSION
+   * ===================================================
+   */
+
+  const earlyProofFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020D-EARLY-PROOF",
+
+      payload:
+        "{\"early_proof\":true}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020D-EARLY-PROOF"
+    });
+
+
+  const earlyProof =
+    adapterProofForFixture(
+      earlyProofFixture,
+      {
+        signedAt:
+          "2026-08-24T10:06:01Z"
+      }
+    );
+
+
+  let earlyProofCalls =
+    0;
+
+
+  await expectReject(
+    "A020D_PROOF_BEFORE_EXECUTION_ADMISSION_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          earlyProofFixture,
+
+          async () => {
+            earlyProofCalls += 1;
+            return {};
+          }
+        ),
+
+        adapterInvocationProof:
+          earlyProof
+      }),
+
+    "EXECUTION_ADAPTER_INVOCATION_PROOF_BEFORE_EXECUTION_ADMISSION"
+  );
+
+
+  if (
+    earlyProofCalls !==
+      0 ||
+    existsSync(
+      earlyProofFixture
+        .invocationRegistryPath
+    )
+  ) {
+    fail(
+      "A020D_EARLY_PROOF_REACHED_CLAIM_OR_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020D_PROOF_BEFORE_EXECUTION_ADMISSION_CALLBACK_ZERO=PASS"
+  );
+
+
+  /*
+   * ===================================================
+   * 11. TARGET SUBSTITUTION
+   * ===================================================
+   */
+
+  const targetFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020D-TARGET",
+
+      payload:
+        "{\"target\":\"A\"}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020D-TARGET"
+    });
+
+
+  let targetCalls =
+    0;
+
+
+  await expectReject(
+    "A020D_TARGET_SUBSTITUTION_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          targetFixture,
+
+          async () => {
+            targetCalls += 1;
+            return {};
+          }
+        ),
+
+        externalSystemReference:
+          "BANK-SANDBOX-SUBSTITUTED"
+      }),
+
+    "EXECUTION_ADAPTER_SIGNED_AUTHORIZATION_VERIFY_FAILED"
+  );
+
+
+  if (
+    targetCalls !==
+      0 ||
+    existsSync(
+      targetFixture
+        .invocationRegistryPath
+    )
+  ) {
+    fail(
+      "A020D_TARGET_SUBSTITUTION_REACHED_CLAIM_OR_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020D_TARGET_SUBSTITUTION_CALLBACK_ZERO=PASS"
+  );
+
+
+  /*
+   * ===================================================
+   * 12. FUTURE SIGNED_AT
+   * ===================================================
+   */
+
+  const futureTrustPath =
+    join(
+      root,
+      "adapter-trust-future.jsonl"
+    );
+
+
+  const futureCapabilityPath =
+    join(
+      root,
+      "adapter-capability-future.jsonl"
+    );
+
+
+  registerAdapterTrust({
+    registryPath:
+      futureTrustPath,
+
+    eventId:
+      "ADAPTER-TRUST-EVENT-A020D-FUTURE",
+
+    validUntil:
+      "2100-01-01T00:00:00Z"
+  });
+
+
+  grantAdapterCapability({
+    registryPath:
+      futureCapabilityPath,
+
+    eventId:
+      "ADAPTER-CAPABILITY-EVENT-A020D-FUTURE",
+
+    validUntil:
+      "2100-01-01T00:00:00Z"
+  });
+
+
+  const futureFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020D-FUTURE",
+
+      payload:
+        "{\"future\":true}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020D-FUTURE"
+    });
+
+
+  const futureProof =
+    adapterProofForFixture(
+      futureFixture,
+      {
+        trustRegistryPath:
+          futureTrustPath,
+
+        capabilityRegistryPath:
+          futureCapabilityPath,
+
+        signedAt:
+          "2099-01-01T00:00:00Z"
+      }
+    );
+
+
+  let futureCalls =
+    0;
+
+
+  await expectReject(
+    "A020D_FUTURE_SIGNED_AT_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          futureFixture,
+
+          async () => {
+            futureCalls += 1;
+            return {};
+          }
+        ),
+
+        adapterTrustRegistryPath:
+          futureTrustPath,
+
+        capabilityRegistryPath:
+          futureCapabilityPath,
+
+        adapterInvocationProof:
+          futureProof
+      }),
+
+    "EXECUTION_ADAPTER_INVOCATION_PROOF_FROM_FUTURE"
+  );
+
+
+  if (
+    futureCalls !==
+      0 ||
+    existsSync(
+      futureFixture
+        .invocationRegistryPath
+    )
+  ) {
+    fail(
+      "A020D_FUTURE_PROOF_REACHED_CLAIM_OR_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020D_FUTURE_SIGNED_AT_CALLBACK_ZERO=PASS"
+  );
+
+
+  /*
+   * ===================================================
+   * 13. HISTORICALLY VALID KEY, CURRENTLY REVOKED
+   * ===================================================
+   */
+
+  const revokedTrustPath =
+    join(
+      root,
+      "adapter-trust-current-revoked.jsonl"
+    );
+
+
+  registerAdapterTrust({
+    registryPath:
+      revokedTrustPath,
+
+    eventId:
+      "ADAPTER-TRUST-EVENT-A020D-CURRENT-KEY"
+  });
+
+
+  const revokedKeyFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020D-REVOKED-KEY",
+
+      payload:
+        "{\"revoked_key\":true}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020D-REVOKED-KEY"
+    });
+
+
+  const revokedKeyProof =
+    adapterProofForFixture(
+      revokedKeyFixture,
+      {
+        trustRegistryPath:
+          revokedTrustPath
+      }
+    );
+
+
+  revokeExecutionAdapterKey({
+    registryPath:
+      revokedTrustPath,
+
+    revocation: {
+      schema_version:
+        "1.0",
+
+      event_id:
+        "ADAPTER-TRUST-EVENT-A020D-CURRENT-KEY-REVOKED",
+
+      event_type:
+        "REVOKED",
+
+      adapter_id:
+        "ADAPTER-A019-REFERENCE",
+
+      key_id:
+        "ADAPTER-KEY-A019-REFERENCE",
+
+      scope:
+        "EXECUTION_ADAPTER_INVOCATION_SIGNING",
+
+      public_key_sha256:
+        adapterPublicSha,
+
+      revoked_at:
+        "2026-08-24T11:00:00Z",
+
+      reason_code:
+        "OPERATOR_ACTION"
+    },
+
+    recordedAt:
+      "2026-08-24T11:05:00Z",
+
+    recordedBy:
+      "IPR-A020D-TRUST-ADMIN"
+  });
+
+
+  let revokedKeyCalls =
+    0;
+
+
+  await expectReject(
+    "A020D_CURRENT_REVOKED_KEY_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          revokedKeyFixture,
+
+          async () => {
+            revokedKeyCalls += 1;
+            return {};
+          }
+        ),
+
+        adapterTrustRegistryPath:
+          revokedTrustPath,
+
+        adapterInvocationProof:
+          revokedKeyProof
+      }),
+
+    "EXECUTION_ADAPTER_CURRENT_AUTHORIZATION_VERIFY_FAILED"
+  );
+
+
+  if (
+    revokedKeyCalls !==
+      0 ||
+    existsSync(
+      revokedKeyFixture
+        .invocationRegistryPath
+    )
+  ) {
+    fail(
+      "A020D_REVOKED_KEY_REACHED_CLAIM_OR_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020D_CURRENT_REVOKED_KEY_CALLBACK_ZERO=PASS"
+  );
+
+
+  /*
+   * ===================================================
+   * 14. HISTORICALLY VALID CAPABILITY,
+   *     CURRENTLY REVOKED
+   * ===================================================
+   */
+
+  const revokedCapabilityPath =
+    join(
+      root,
+      "adapter-capability-current-revoked.jsonl"
+    );
+
+
+  grantAdapterCapability({
+    registryPath:
+      revokedCapabilityPath,
+
+    eventId:
+      "ADAPTER-CAPABILITY-EVENT-A020D-CURRENT-CAP"
+  });
+
+
+  const revokedCapabilityFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020D-REVOKED-CAPABILITY",
+
+      payload:
+        "{\"revoked_capability\":true}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020D-REVOKED-CAPABILITY"
+    });
+
+
+  const revokedCapabilityProof =
+    adapterProofForFixture(
+      revokedCapabilityFixture,
+      {
+        capabilityRegistryPath:
+          revokedCapabilityPath
+      }
+    );
+
+
+  revokeExecutionAdapterCapability({
+    registryPath:
+      revokedCapabilityPath,
+
+    revocation: {
+      schema_version:
+        "1.0",
+
+      event_id:
+        "ADAPTER-CAPABILITY-EVENT-A020D-CURRENT-CAP-REVOKED",
+
+      event_type:
+        "REVOKED",
+
+      grant_id:
+        "ADAPTER-CAPABILITY-GRANT-A019-REFERENCE",
+
+      adapter_id:
+        "ADAPTER-A019-REFERENCE",
+
+      capability:
+        "INVOKE_EXTERNAL_SYSTEM",
+
+      external_system_reference:
+        "BANK-SANDBOX-A019",
+
+      revoked_at:
+        "2026-08-24T11:00:00Z",
+
+      reason_code:
+        "OPERATOR_ACTION"
+    },
+
+    recordedAt:
+      "2026-08-24T11:05:00Z",
+
+    recordedBy:
+      "IPR-A020D-CAPABILITY-ADMIN"
+  });
+
+
+  let revokedCapabilityCalls =
+    0;
+
+
+  await expectReject(
+    "A020D_CURRENT_REVOKED_CAPABILITY_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          revokedCapabilityFixture,
+
+          async () => {
+            revokedCapabilityCalls += 1;
+            return {};
+          }
+        ),
+
+        capabilityRegistryPath:
+          revokedCapabilityPath,
+
+        adapterInvocationProof:
+          revokedCapabilityProof
+      }),
+
+    "EXECUTION_ADAPTER_CURRENT_AUTHORIZATION_VERIFY_FAILED"
+  );
+
+
+  if (
+    revokedCapabilityCalls !==
+      0 ||
+    existsSync(
+      revokedCapabilityFixture
+        .invocationRegistryPath
+    )
+  ) {
+    fail(
+      "A020D_REVOKED_CAPABILITY_REACHED_CLAIM_OR_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020D_CURRENT_REVOKED_CAPABILITY_CALLBACK_ZERO=PASS"
+  );
+
+
+  console.log(
+    "A020D_R1B_ATTACK_SUITE=PASS"
+  );
+
+
+  /*
+   * A020E-C: missing provenance path.
+   * Must fail before A019 durable claim.
+   */
+
+  const missingProvenanceFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020E-C-MISSING-PROVENANCE",
+
+      payload:
+        "{\"a020e\":\"missing-provenance\"}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020E-C-MISSING-PROVENANCE"
+    });
+
+
+  let missingProvenanceCalls =
+    0;
+
+
+  await expectReject(
+    "A020E_C_MISSING_PROVENANCE_PATH_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          missingProvenanceFixture,
+
+          async () => {
+            missingProvenanceCalls += 1;
+            return {};
+          }
+        ),
+
+        provenanceRegistryPath:
+          undefined
+      }),
+
+    "EXECUTION_ADAPTER_AUTHORIZATION_PROVENANCE_REGISTRY_PATH_REQUIRED"
+  );
+
+
+  if (
+    missingProvenanceCalls !==
+      0 ||
+    existsSync(
+      missingProvenanceFixture
+        .invocationRegistryPath
+    )
+  ) {
+    fail(
+      "A020E_C_MISSING_PROVENANCE_REACHED_CLAIM_OR_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020E_C_MISSING_PROVENANCE_CALLBACK_ZERO=PASS"
+  );
+
+
+  console.log(
+    "A020E_C_MISSING_PROVENANCE_CLAIM_NONE=PASS"
+  );
+
+
+  /*
+   * A020E-C: provenance persistence failure after A019
+   * claim. Callback must remain blocked, claim spent.
+   */
+
+  const provenanceFailureFixture =
+    createAdmittedAttempt({
+      suffix:
+        "A020E-C-PROVENANCE-FAILURE",
+
+      payload:
+        "{\"a020e\":\"persistence-failure\"}",
+
+      idempotencyKey:
+        "IDEMPOTENCY-A020E-C-PROVENANCE-FAILURE"
+    });
+
+
+  let provenanceFailureCalls =
+    0;
+
+
+  await expectReject(
+    "A020E_C_POSTCLAIM_PROVENANCE_FAILURE_DENIED",
+
+    () =>
+      invokeExecutionAdapterBoundary({
+        ...boundaryArgs(
+          provenanceFailureFixture,
+
+          async () => {
+            provenanceFailureCalls += 1;
+            return {};
+          }
+        ),
+
+        provenanceRegistryPath:
+          root
+      }),
+
+    "EXECUTION_ADAPTER_AUTHORIZATION_PROVENANCE_EMISSION_VERIFY_FAILED"
+  );
+
+
+  if (
+    provenanceFailureCalls !==
+      0
+  ) {
+    fail(
+      "A020E_C_POSTCLAIM_PROVENANCE_FAILURE_REACHED_CALLBACK"
+    );
+  }
+
+
+  console.log(
+    "A020E_C_POSTCLAIM_PROVENANCE_FAILURE_CALLBACK_ZERO=PASS"
+  );
+
+
+  const spentInvocationRecords =
+    listExecutionAdapterInvocations({
+      registryPath:
+        provenanceFailureFixture
+          .invocationRegistryPath
+    });
+
+
+  if (
+    spentInvocationRecords.length !==
+      1
+  ) {
+    fail(
+      `A020E_C_POSTCLAIM_SPENT_COUNT_INVALID:${spentInvocationRecords.length}`
+    );
+  }
+
+
+  console.log(
+    "A020E_C_POSTCLAIM_FAILURE_CLAIM_REMAINS_SPENT=PASS"
+  );
+
+
+  console.log(
+    "A020E_C_LIVE_PROVENANCE_EMISSION_ATTACKS=PASS"
+  );
+
+
+  /*
+   * ===================================================
    * FINAL MATRIX
    * ===================================================
    */
@@ -1493,11 +2715,11 @@ try {
   );
 
   console.log(
-    "ADAPTER_IDENTITY_TRUST=NOT_IMPLEMENTED"
+    "ADAPTER_IDENTITY_TRUST=TECHNICAL_KEY_CONTROL_ENFORCED"
   );
 
   console.log(
-    "ADAPTER_CAPABILITY_AUTHORIZATION=NOT_IMPLEMENTED"
+    "ADAPTER_CAPABILITY_AUTHORIZATION=ENFORCED"
   );
 
   console.log(
@@ -1505,7 +2727,7 @@ try {
   );
 
   console.log(
-    "EXTERNAL_SYSTEM_AUTHORIZATION_BINDING=NOT_PROVEN_BY_A019A"
+    "EXTERNAL_SYSTEM_AUTHORIZATION_BINDING=ENFORCED_BY_A020D_LOCAL_POLICY"
   );
 
   console.log(
@@ -1530,6 +2752,26 @@ try {
 
   console.log(
     "A019B_ADAPTER_INVOCATION_PROVENANCE=PASS"
+  );
+
+  console.log(
+    "A020D_CURRENT_CALLBACK_AUTHORIZATION=ENFORCED"
+  );
+
+  console.log(
+    "A020D_SIGNED_ADAPTER_AUTHORIZATION=PASS"
+  );
+
+  console.log(
+    "A020D_LIVE_GATE_ATTACKS=PASS"
+  );
+
+  console.log(
+    "A020E_C_DURABLE_PROVENANCE_BEFORE_CALLBACK=ENFORCED"
+  );
+
+  console.log(
+    "A020E_C_LIVE_PROVENANCE_EMISSION=PASS"
   );
 
 } finally {
