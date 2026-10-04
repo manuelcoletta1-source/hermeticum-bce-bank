@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermeticum-bce.eu/schemas/hbce-entitlement-source.schema.json",
+  "title": "HBCE Bank EntitlementSource",
+  "description": "Source from which an exercisable position may derive. Registration of this record does not itself establish legal interpretation, authority, authorization or a source of power.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "entitlement_ref",
+    "source_type",
+    "source_ref",
+    "issuer_or_origin",
+    "subject_ref",
+    "jurisdiction",
+    "effective_from",
+    "effective_until",
+    "superseded_by",
+    "revocation_state",
+    "verification_method",
+    "technical_status",
+    "evidence_refs"
+  ],
+  "properties": {
+    "entitlement_ref": {
+      "type": "string",
+      "pattern": "^ENT-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "source_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "source_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "issuer_or_origin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "subject_ref": {
+      "type": "string",
+      "pattern": "^SUB-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "jurisdiction": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effective_until": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "superseded_by": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^ENT-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+        }
+      ]
+    },
+    "revocation_state": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "REVOKED",
+        "SUPERSEDED"
+      ]
+    },
+    "verification_method": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "technical_status": {
+      "type": "string",
+      "enum": [
+        "TECHNICALLY_VERIFIED",
+        "PARTIALLY_VERIFIED",
+        "UNRESOLVED",
+        "CONTESTED",
+        "INSUFFICIENT_EVIDENCE",
+        "REVOKED",
+        "EXPIRED",
+        "SUPERSEDED"
+      ]
+    },
+    "evidence_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    }
+  }
+}
