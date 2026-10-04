@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermeticum-bce.eu/schemas/hbce-subject-binding.schema.json",
+  "title": "HBCE Bank SubjectBinding",
+  "description": "Canonical Bank Edition binding between an operational Subject and an identity source. Revoking, superseding or expiring a binding does not revoke, expire or erase the represented person.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "binding_ref",
+    "subject_ref",
+    "identity_source_ref",
+    "binding_type",
+    "verified_at",
+    "valid_until",
+    "revocation_state",
+    "evidence_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "binding_ref": {
+      "type": "string",
+      "pattern": "^BINDING-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "subject_ref": {
+      "type": "string",
+      "pattern": "^SUB-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "identity_source_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "binding_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revocation_state": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "REVOKED",
+        "SUPERSEDED"
+      ]
+    },
+    "evidence_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    }
+  }
+}

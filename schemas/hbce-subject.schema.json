@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermeticum-bce.eu/schemas/hbce-subject.schema.json",
+  "title": "HBCE Bank Subject",
+  "description": "Canonical Bank Edition operational Subject representation. Subject is an operational protocol subject and does not by itself establish a physical person, civil identity, legal identity, credential, role, authority or authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "subject_ref",
+    "subject_class",
+    "contextual_id",
+    "root_ref_disclosed",
+    "registration_state",
+    "created_at",
+    "evidence_refs"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "subject_ref": {
+      "type": "string",
+      "pattern": "^SUB-[A-Z0-9][A-Z0-9._:-]{2,127}$"
+    },
+    "subject_class": {
+      "type": "string",
+      "enum": [
+        "HUMAN",
+        "ORGANIZATION",
+        "AI_AGENT",
+        "SERVICE",
+        "DEVICE",
+        "ROBOT",
+        "INFRASTRUCTURE"
+      ]
+    },
+    "contextual_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "root_ref_disclosed": {
+      "type": "boolean"
+    },
+    "registration_state": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    }
+  }
+}
